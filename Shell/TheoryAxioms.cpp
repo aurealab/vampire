@@ -1113,21 +1113,21 @@ void TheoryAxioms::apply()
     }
   }
 
-  VirtualIterator<TermAlgebra*> tas = env.signature->termAlgebrasIterator();
-  while (tas.hasNext()) {
-    TermAlgebra* ta = tas.next();
+  // VirtualIterator<TermAlgebra*> tas = env.signature->termAlgebrasIterator();
+  // while (tas.hasNext()) {
+  //   TermAlgebra* ta = tas.next();
 
-    addExhaustivenessAxiom(ta);
-    addDistinctnessAxiom(ta);
-    addInjectivityAxiom(ta);
-    addDiscriminationAxiom(ta);
+  //   addExhaustivenessAxiom(ta);
+  //   addDistinctnessAxiom(ta);
+  //   addInjectivityAxiom(ta);
+  //   addDiscriminationAxiom(ta);
 
-    if (env.options->termAlgebraCyclicityCheck() == Options::TACyclicityCheck::AXIOM) {
-      addAcyclicityAxiom(ta);
-    }
+  //   if (env.options->termAlgebraCyclicityCheck() == Options::TACyclicityCheck::AXIOM) {
+  //     addAcyclicityAxiom(ta);
+  //   }
 
-    modified = true;
-  }
+  //   modified = true;
+  // }
 
   if(modified) {
     _prb.reportEqualityAdded(false);

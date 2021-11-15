@@ -119,6 +119,31 @@ void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Li
 
       vvector<pair<Literal*, vset<Literal*>>> schLits;
       for (auto& kv : schOccMap) {
+        if (!_allowed.empty()) {
+          auto found = false;
+          for (const auto& kv2 : kv.first.inductionTerms()) {
+            if (_allowed.count(kv2.first)) {
+              found = true;
+              break;
+            }
+            // bool inAll = true;
+            // for (const auto& a : _allowed) {
+            //   if (!a->containsSubterm(TermList(kv2.first))) {
+            //     inAll = false;
+            //     break;
+            //   }
+            // }
+            // if (inAll) {
+            //   found = true;
+            //   break;
+            // } else {
+            //   // cout << "allowed terms do not contain " << *kv2.first << endl;
+            // }
+          }
+          if (!found) {
+            continue;
+          }
+        }
         // Retain side literals for further processing if:
         // (1) they contain some induction term from the current scheme
         // (2) they have either induction depth 0 or they contain some complex induction term

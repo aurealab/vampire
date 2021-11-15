@@ -173,6 +173,25 @@ protected:
   void handleClause(Clause* c, bool adding);
 };
 
+/**
++ * Term index for remodulation (i.e. doing the reverse of demodulation)
++ */
+class RemodulationLHSIndex
+: public TermIndex
+{
+public:
+  CLASS_NAME(RemodulationLHSIndex);
+  USE_ALLOCATOR(RemodulationLHSIndex);
+
+  RemodulationLHSIndex(TermIndexingStructure* is, Ordering& ord)
+  : TermIndex(is), _ord(ord) {};
+protected:
+  void handleClause(Clause* c, bool adding);
+private:
+  Ordering& _ord;
+};
+
+
 /////////////////////////////////////////////////////
 // Indices for higher-order inferences from here on//
 /////////////////////////////////////////////////////

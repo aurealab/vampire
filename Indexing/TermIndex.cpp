@@ -173,6 +173,49 @@ void InductionInequalitySubtermIndex::handleClause(Clause* c, bool adding)
   }
 }
 
+void RemodulationLHSIndex::handleClause(Clause* c, bool adding)
+{
+  CALL("RemodulationLHSIndex::handleClause");
+
+  if (c->length()!=1) {
+    return;
+  }
+
+  // TimeCounter tc(TC_FORWARD_DEMODULATION_INDEX_MAINTENANCE);
+
+  Literal* lit=(*c)[0];
+  TermIterator lhsi=EqHelper::getLHSIterator(lit, _ord);
+  while (lhsi.hasNext()) {
+    auto lhs = lhsi.next();
+    auto rhs = EqHelper::getOtherEqualitySide(lit, lhs);
+    if (!rhs.containsAllVariablesOf(lhs)) {
+      continue;
+    }
+    // cout << "REMIND " << *lit << " " << rhs << " " << adding << endl;
+    // NonVariableIterator stit(lhs.term());
+    // bool found = false;
+    // while (stit.hasNext()) {
+    //   auto st = stit.next();
+    //   if (InductionHelper::isInductionTermFunctor(st.term()->functor()) &&
+    //     (InductionHelper::isStructInductionFunctor(st.term()->functor()) ||
+    //      InductionHelper::isIntInductionTermListInLiteral(st, lit))) {
+    //       found = true;
+    //       break;
+    //   }
+    // }
+    // if (!found) {
+    //   continue;
+    // }
+    if (adding) {
+      _is->insert(rhs, lit, c);
+    }
+    else {
+      _is->remove(rhs, lit, c);
+    }
+  }
+}
+
+
 template <bool combinatorySupSupport>
 void DemodulationSubtermIndexImpl<combinatorySupSupport>::handleClause(Clause* c, bool adding)
 {
@@ -255,7 +298,9 @@ void InductionTermIndex::handleClause(Clause* c, bool adding)
           TermList tl = it.next();
           if (!tl.term()) continue;
           if (InductionHelper::isInductionTermFunctor(tl.term()->functor()) &&
-              InductionHelper::isIntInductionTermListInLiteral(tl, lit)) {
+              (InductionHelper::isStructInductionFunctor(tl.term()->functor()) ||
+               InductionHelper::isIntInductionTermListInLiteral(tl, lit))) {
+            // cout << "INDIND " << *lit << " " << tl << " " << adding << endl;
             if (adding) {
               _is->insert(tl, lit, c);
             } else {

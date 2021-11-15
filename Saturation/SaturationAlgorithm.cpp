@@ -87,6 +87,7 @@
 #include "Inferences/Instantiation.hpp"
 #include "Inferences/TheoryInstAndSimp.hpp"
 #include "Inferences/Induction.hpp"
+#include "Inferences/InductionRemodulation.hpp"
 #include "Inferences/ArithmeticSubtermGeneralization.hpp"
 #include "Inferences/TautologyDeletionISE.hpp"
 #include "Inferences/CombinatorDemodISE.hpp"
@@ -1520,6 +1521,7 @@ SaturationAlgorithm* SaturationAlgorithm::createFromOptions(Problem& prb, const 
       }
     }
     auto induction = new GeneralInduction(generators, InferenceRule::INDUCTION_AXIOM);
+    gie->addFront(new InductionRemodulation(induction));
     gie->addFront(induction);
     // since indhrw relies on induction, we create this
     // inference here and hand the induction object to it

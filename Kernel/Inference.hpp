@@ -286,6 +286,7 @@ enum class InferenceRule : unsigned char {
   FNDEF_REWRITING,
   /** induction hypothesis rewriting inference */
   IH_REWRITING,
+  INDUCTION_REMODULATION,
   /** superposition with constraints */
   CONSTRAINED_SUPERPOSITION,
   /** equality factoring inference */
