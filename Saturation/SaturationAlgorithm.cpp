@@ -213,6 +213,18 @@ std::unique_ptr<PassiveClauseContainer> makeLevel4(bool isOutermost, const Optio
   }
 }
 
+std::unique_ptr<PassiveClauseContainer> makeLevel5(bool isOutermost, const Options& opt, vstring name)
+{
+  Lib::vvector<std::unique_ptr<PassiveClauseContainer>> queues;
+  Lib::vvector<float> cutoffs = {0.0, numeric_limits<float>::max()};
+  for (unsigned i = 0; i < cutoffs.size(); i++)
+  {
+    auto queueName = name + "Ind" + Int::toString(cutoffs[i]) + ":";
+    queues.push_back(makeLevel4(false, opt, queueName));
+  }
+  return std::make_unique<InductionPassiveClauseContainer>(isOutermost, opt, name + "Ind", std::move(queues));
+}
+
 /**
  * Create a SaturationAlgorithm object
  *
@@ -250,7 +262,7 @@ SaturationAlgorithm::SaturationAlgorithm(Problem& prb, const Options& opt)
   }
   else
   {
-    _passive = makeLevel4(true, opt, "");
+    _passive = makeLevel5(true, opt, "");
   }
   _active = new ActiveClauseContainer(opt);
 
@@ -1257,7 +1269,10 @@ start:
     Clause* c = _unprocessed->pop();
     ASS(!isRefutation(c));
 
-    if (forwardSimplify(c)) {
+    if (c->isInductionLemma() || forwardSimplify(c)) {
+      if (c->isInductionLemma()) {
+        c->incRefCnt();
+      }
       onClauseRetained(c);
       addToPassive(c);
       ASS_EQ(c->store(), Clause::PASSIVE);
@@ -1509,6 +1524,9 @@ SaturationAlgorithm* SaturationAlgorithm::createFromOptions(Problem& prb, const 
   CompositeGIE* gie=new CompositeGIE();
 
   //TODO here induction is last, is that right?
+  GeneralInduction* induction = nullptr;
+  bool remodulation = true;
+  InductionRemodulation* inductionRemodulation = nullptr;
   if(opt.induction()!=Options::Induction::NONE){
     gie->addFront(new Induction());
     vvector<InductionSchemeGenerator*> generators;
@@ -1520,8 +1538,11 @@ SaturationAlgorithm* SaturationAlgorithm::createFromOptions(Problem& prb, const 
         generators.push_back(new RecursionInductionSchemeGenerator());
       }
     }
-    auto induction = new GeneralInduction(generators, InferenceRule::INDUCTION_AXIOM);
-    gie->addFront(new InductionRemodulation(induction));
+    induction = new GeneralInduction(generators, InferenceRule::INDUCTION_AXIOM);
+    if (remodulation) {
+      inductionRemodulation = new InductionRemodulation(induction);
+      gie->addFront(inductionRemodulation);
+    }
     gie->addFront(induction);
     // since indhrw relies on induction, we create this
     // inference here and hand the induction object to it
@@ -1639,14 +1660,17 @@ SaturationAlgorithm* SaturationAlgorithm::createFromOptions(Problem& prb, const 
     }
   }
 
-
 #if VZ3
   if (opt.theoryInstAndSimp() != Shell::Options::TheoryInstSimp::OFF){
     sgi->push(new TheoryInstAndSimp());
   }
 #endif
 
-  res->setGeneratingInferenceEngine(sgi);
+  if (remodulation && env.options->induction()!=Options::Induction::NONE) {
+    res->setGeneratingInferenceEngine(new InductionSGIWrapper(induction, inductionRemodulation, sgi));
+  } else {
+    res->setGeneratingInferenceEngine(sgi);
+  }
 
   res->setImmediateSimplificationEngine(createISE(prb, opt, res->getOrdering()));
 

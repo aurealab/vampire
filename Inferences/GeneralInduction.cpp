@@ -31,6 +31,7 @@
 
 #include "Inferences/BinaryResolution.hpp"
 #include "Inferences/InductionHelper.hpp"
+#include "Inferences/InductionRemodulation.hpp"
 
 #include "GeneralInduction.hpp"
 
@@ -97,9 +98,29 @@ ClauseIterator GeneralInduction::generateClauses(Clause* premise)
   return pvi(res);
 }
 
+bool compatibleOccurrences(const OccurrenceMap& o, const OccurrenceMap& with) {
+  for (const auto& kv : o._m) {
+    auto it = with._m.find(kv.first);
+    if (it != with._m.end()) { // only check ones that are marked in 'with'
+      auto o1 = kv.second;
+      auto o2 = it->second;
+      for (unsigned i = 0; i < o1.num_bits(); i++) {
+        auto b1 = o1.pop_last();
+        auto b2 = o2.pop_last();
+        if (b2 && !b1) {
+          return false;
+        }
+      }
+      ASS_EQ(o1.num_bits(), o2.num_bits());
+    }
+  }
+  return true;
+}
+
 void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Literal* literal)
 {
   CALL("GeneralInduction::process");
+  TimeCounter tc(TC_INDUCTION);
 
   if(env.options->showInduction()){
     env.beginOutput();
@@ -108,6 +129,11 @@ void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Li
   }
 
   auto pairs = selectMainSidePairs(literal, premise);
+
+  RemodulationInfo* rinfo = nullptr;
+  if (premise->inference().rule() == InferenceRule::INDUCTION_REMODULATION) {
+    rinfo = static_cast<RemodulationInfo*>(premise->getRemodulationInfo());
+  }
 
   for (auto& gen : _gen) {
     for (const auto& kv : pairs) {
@@ -119,26 +145,13 @@ void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Li
 
       vvector<pair<Literal*, vset<Literal*>>> schLits;
       for (auto& kv : schOccMap) {
-        if (!_allowed.empty()) {
+        if (rinfo && !rinfo->_allowed.empty()) {
           auto found = false;
           for (const auto& kv2 : kv.first.inductionTerms()) {
-            if (_allowed.count(kv2.first)) {
+            if (rinfo->_allowed.count(kv2.first)) {
               found = true;
               break;
             }
-            // bool inAll = true;
-            // for (const auto& a : _allowed) {
-            //   if (!a->containsSubterm(TermList(kv2.first))) {
-            //     inAll = false;
-            //     break;
-            //   }
-            // }
-            // if (inAll) {
-            //   found = true;
-            //   break;
-            // } else {
-            //   // cout << "allowed terms do not contain " << *kv2.first << endl;
-            // }
           }
           if (!found) {
             continue;
@@ -187,6 +200,9 @@ void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Li
         }
         while (g->hasNext()) {
           auto eg = g->next();
+          if (rinfo && !compatibleOccurrences(eg, rinfo->_om)) {
+            continue;
+          }
           // create the generalized literals by replacing the current
           // set of occurrences of induction terms by the variables
           TermOccurrenceReplacement tr(kv.first.inductionTerms(), eg, main.literal);
@@ -504,6 +520,9 @@ vvector<pair<SLQueryResult, vset<pair<Literal*,Clause*>>>> GeneralInduction::sel
   while (it.hasNext())
   {
     auto qr = it.next();
+    if (qr.clause->isInductionLemma()) {
+      continue;
+    }
     // query is side literal
     if (indLit && InductionHelper::isInductionClause(qr.clause) && sideLitCondition(literal, premise, qr.literal, qr.clause))
     {

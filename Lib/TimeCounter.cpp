@@ -406,6 +406,12 @@ void TimeCounter::outputSingleStat(TimeCounterUnit tcu, ostream& out)
   case TC_THEORY_INST_SIMP:
     out << "theory instantiation and simplification";
     break;
+  case TC_INDUCTION:
+    out << "induction";
+    break;
+  case TC_REMODULATION:
+    out << "remodulation";
+    break;
   default:
     ASSERTION_VIOLATION;
   }

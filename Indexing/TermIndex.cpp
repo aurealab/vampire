@@ -76,6 +76,10 @@ void SuperpositionSubtermIndex::handleClause(Clause* c, bool adding)
 {
   CALL("SuperpositionSubtermIndex::handleClause");
 
+  if (c->isInductionLemma()) {
+    return;
+  }
+
   TimeCounter tc(TC_BACKWARD_SUPERPOSITION_INDEX_MAINTENANCE);
 
   unsigned selCnt=c->numSelected();
@@ -102,6 +106,10 @@ void SuperpositionLHSIndex::handleClause(Clause* c, bool adding)
 {
   CALL("SuperpositionLHSIndex::handleClause");
 
+  if (c->isInductionLemma()) {
+    return;
+  }
+
   TimeCounter tc(TC_FORWARD_SUPERPOSITION_INDEX_MAINTENANCE);
 
   unsigned selCnt=c->numSelected();
@@ -123,6 +131,10 @@ void SuperpositionLHSIndex::handleClause(Clause* c, bool adding)
 void InductionEqualityLHSIndex::handleClause(Clause* c, bool adding)
 {
   CALL("InductionEqualityLHSIndex::handleClause");
+
+  if (c->isInductionLemma()) {
+    return;
+  }
 
   for (unsigned i = 0; i < c->length(); i++) {
     Literal* lit=(*c)[i];
@@ -146,6 +158,10 @@ void InductionInequalitySubtermIndex::handleClause(Clause* c, bool adding)
   CALL("InductionInequalitySubtermIndex::handleClause");
 
   static DHSet<TermList> inserted;
+
+  if (c->isInductionLemma()) {
+    return;
+  }
 
   for (unsigned i = 0; i < c->length(); i++) {
     inserted.reset();
@@ -192,20 +208,20 @@ void RemodulationLHSIndex::handleClause(Clause* c, bool adding)
       continue;
     }
     // cout << "REMIND " << *lit << " " << rhs << " " << adding << endl;
-    // NonVariableIterator stit(lhs.term());
-    // bool found = false;
-    // while (stit.hasNext()) {
-    //   auto st = stit.next();
-    //   if (InductionHelper::isInductionTermFunctor(st.term()->functor()) &&
-    //     (InductionHelper::isStructInductionFunctor(st.term()->functor()) ||
-    //      InductionHelper::isIntInductionTermListInLiteral(st, lit))) {
-    //       found = true;
-    //       break;
-    //   }
-    // }
-    // if (!found) {
-    //   continue;
-    // }
+    NonVariableIterator stit(lhs.term());
+    bool found = false;
+    while (stit.hasNext()) {
+      auto st = stit.next();
+      if (InductionHelper::isInductionTermFunctor(st.term()->functor()) &&
+        (InductionHelper::isStructInductionFunctor(st.term()->functor()) ||
+         InductionHelper::isIntInductionTermListInLiteral(st, lit))) {
+          found = true;
+          break;
+      }
+    }
+    if (!found) {
+      continue;
+    }
     if (adding) {
       _is->insert(rhs, lit, c);
     }
@@ -222,6 +238,10 @@ void DemodulationSubtermIndexImpl<combinatorySupSupport>::handleClause(Clause* c
   CALL("DemodulationSubtermIndex::handleClause");
 
   TimeCounter tc(TC_BACKWARD_DEMODULATION_INDEX_MAINTENANCE);
+
+  if (c->isInductionLemma()) {
+    return;
+  }
 
   static DHSet<TermList> inserted;
 
@@ -264,7 +284,7 @@ void DemodulationLHSIndex::handleClause(Clause* c, bool adding)
 {
   CALL("DemodulationLHSIndex::handleClause");
 
-  if (c->length()!=1) {
+  if (c->length()!=1 || c->isInductionLemma()) {
     return;
   }
 

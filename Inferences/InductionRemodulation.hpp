@@ -34,7 +34,6 @@ public:
   LiteralSubsetReplacement2(Literal* lit, Term* o, TermList r)
       : _lit(lit), _o(o), _r(r) {
     _occurrences = _lit->countSubtermOccurrences(TermList(_o));
-    _maxIterations = pow(2, _occurrences);
   }
 
   Literal* transformSubset();
@@ -45,11 +44,9 @@ protected:
 private:
   // _iteration serves as a map of occurrences to replace
   unsigned _iteration = 0;
-  unsigned _maxIterations;
   // Counts how many occurrences were already encountered in one transformation
   unsigned _matchCount = 0;
   unsigned _occurrences;
-  const unsigned _maxOccurrences = 20;
   Literal* _lit;
   Term* _o;
   TermList _r;
@@ -63,31 +60,65 @@ public:
   USE_ALLOCATOR(InductionRemodulation);
 
   InductionRemodulation(GeneralInduction* induction)
-    : _lhsIndex(), _termIndex(),
-      _induction(induction), _splitter(),
-      _dupLitRemoval(new DuplicateLiteralRemovalISE()) {}
+    : _lhsIndex(), _termIndex() {}
 
   void attach(SaturationAlgorithm* salg) override;
   void detach() override;
-  ClauseIterator generateClauses(Clause* premise) override {
-    // cout << "START " << *premise << endl;
-    return generateClauses(premise, 0, vset<Term*>());
-  }
-  ClauseIterator generateClauses(Clause* premise, unsigned depth, vset<Term*> allowed);
+  ClauseIterator generateClauses(Clause* premise) override;
   ClauseIterator perform(
     Clause* rwClause, Literal* rwLit, TermList rwTerm,
     Clause* eqClause, Literal* eqLit, TermList eqLHS,
     ResultSubstitutionSP subst, bool eqIsResult,
-    vset<Term*> allowed,
-    UnificationConstraintStackSP constraints, unsigned depth);
+    UnificationConstraintStackSP constraints);
 private:
   RemodulationLHSIndex* _lhsIndex;
   InductionTermIndex* _termIndex;
-  GeneralInduction* _induction;
-  Splitter* _splitter;
-  unique_ptr<DuplicateLiteralRemovalISE> _dupLitRemoval;
 };
 
+class InductionSGIWrapper
+: public SimplifyingGeneratingInference
+{
+public:
+  CLASS_NAME(InductionSGIWrapper);
+  USE_ALLOCATOR(InductionSGIWrapper);
+
+  InductionSGIWrapper(GeneralInduction* induction, InductionRemodulation* inductionRemodulation, SimplifyingGeneratingInference* generator)
+    : _induction(induction), _inductionRemodulation(inductionRemodulation), _generator(generator) {}
+
+  ClauseGenerationResult generateSimplify(Clause* premise) override {
+    if (!premise->isInductionLemma()) {
+      return _generator->generateSimplify(premise);
+    }
+    ClauseIterator clIt = _induction->generateClauses(premise);
+    clIt = pvi(getConcatenatedIterator(clIt, _inductionRemodulation->generateClauses(premise)));
+    return ClauseGenerationResult {
+      .clauses          = clIt,
+      .premiseRedundant = false,
+    };
+  }
+  void attach(SaturationAlgorithm* salg) override
+  {
+    _generator->attach(salg);
+  }
+  void detach() override
+  {
+    _generator->detach();
+  }
+private:
+  GeneralInduction* _induction;
+  InductionRemodulation* _inductionRemodulation;
+  ScopedPtr<SimplifyingGeneratingInference> _generator;
 };
+
+struct RemodulationInfo {
+  CLASS_NAME(RemodulationInfo);
+  USE_ALLOCATOR(RemodulationInfo);
+
+  OccurrenceMap _om;
+  vset<Term*> _rewrites;
+  vset<Term*> _allowed;
+};
+
+}
 
 #endif /*__InductionRemodulation__*/

@@ -198,6 +198,12 @@ public:
   bool isComponent() const { return _component; }
   void setComponent(bool c) { _component = c; }
 
+  void* getRemodulationInfo() const { return _remodulationInfo; }
+  void setRemodulationInfo(void* r) { _remodulationInfo = r; }
+
+  bool isInductionLemma() const { return _inductionLemma; }
+  void setInductionLemma(bool i) { _inductionLemma = i; }
+
   bool skip() const;
 
   unsigned getLiteralPosition(Literal* lit);
@@ -370,6 +376,7 @@ protected:
   unsigned _extensionalityTag : 1;
   /** Clause is a splitting component. */
   unsigned _component : 1;
+  unsigned _inductionLemma : 1;
 
   /** storage class */
   Store _store : 3;
@@ -389,6 +396,8 @@ protected:
   InverseLookup<Literal>* _literalPositions;
 
   int _numActiveSplits;
+
+  void* _remodulationInfo;
 
   size_t _auxTimestamp;
   void* _auxData;
