@@ -1272,12 +1272,18 @@ start:
     if (c->isInductionLemma() || forwardSimplify(c)) {
       if (c->isInductionLemma()) {
         c->incRefCnt();
+        if (_splitter && !_opt.splitAtActivation()) {
+          if (_splitter->doSplitting(c)) {
+            goto splitted;
+          }
+        }
       }
       onClauseRetained(c);
       addToPassive(c);
       ASS_EQ(c->store(), Clause::PASSIVE);
     }
     else {
+splitted:
       ASS_EQ(c->store(), Clause::UNPROCESSED);
       c->setStore(Clause::NONE);
     }

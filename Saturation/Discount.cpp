@@ -36,6 +36,9 @@ bool Discount::handleClauseBeforeActivation(Clause* cl)
 {
   CALL("Discount::handleClauseBeforeActivation");
   ASS(cl->store()==Clause::SELECTED);
+  if (cl->isInductionLemma()) {
+    return true;
+  }
 
   if (!forwardSimplify(cl)) {
     cl->setStore(Clause::NONE);

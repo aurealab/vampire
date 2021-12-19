@@ -1117,10 +1117,12 @@ void TheoryAxioms::apply()
   while (tas.hasNext()) {
     TermAlgebra* ta = tas.next();
 
-    addExhaustivenessAxiom(ta);
-    addDistinctnessAxiom(ta);
-    addInjectivityAxiom(ta);
-    addDiscriminationAxiom(ta);
+    if (env.options->termAlgebraAxioms()) {
+      addExhaustivenessAxiom(ta);
+      addDistinctnessAxiom(ta);
+      addInjectivityAxiom(ta);
+      addDiscriminationAxiom(ta);
+    }
 
     if (env.options->termAlgebraCyclicityCheck() == Options::TACyclicityCheck::AXIOM) {
       addAcyclicityAxiom(ta);

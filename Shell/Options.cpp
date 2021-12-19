@@ -1436,6 +1436,13 @@ void Options::init()
             _lookup.insert(&_termAlgebraInferences);
             _termAlgebraInferences.tag(OptionTag::INFERENCES);
 
+
+            _termAlgebraAxioms = BoolOptionValue("term_algebra_axioms","taa",true);
+            _termAlgebraAxioms.description = "Activates term algebra axioms";
+            _lookup.insert(&_termAlgebraAxioms);
+            _termAlgebraAxioms.tag(OptionTag::INFERENCES);
+
+
             _termAlgebraCyclicityCheck = ChoiceOptionValue<TACyclicityCheck>("term_algebra_acyclicity","tac",
                                                                              TACyclicityCheck::OFF,{"off","axiom","rule","light"});
             _termAlgebraCyclicityCheck.description=

@@ -3059,17 +3059,19 @@ void Schedules::getIntegerInductionSchedule(const Shell::Property& property, Sch
 void Schedules::getStructInductionSchedule(const Shell::Property& property, Schedule& quick, Schedule& fallback) {
   quick.push("lrs+10_1_ind=struct_100");
   quick.push("lrs+10_1_ind=struct:drc=off:to=lpo_170");
-  quick.push("lrs+10_1_ind=struct:fnrw=off_50");
-  quick.push("lrs+10_1_ind=struct:drc=off:fnrw=off:to=lpo_50");
+  quick.push("lrs+10_1_ind=struct:taa=off_160");
+  quick.push("lrs+10_1_ind=struct:drc=off:to=lpo:taa=off_160");
+  // quick.push("lrs+10_1_ind=struct:fnrw=off_50");
+  // quick.push("lrs+10_1_ind=struct:drc=off:fnrw=off:to=lpo_50");
   quick.push("lrs+10_1_ind=struct:indocth=off_100");
   quick.push("lrs+10_1_ind=struct:drc=off:indocth=off:to=lpo_100");
   quick.push("lrs+10_1_ind=struct:indmc=off_50");
   quick.push("lrs+10_1_ind=struct:drc=off:indmc=off:to=lpo_50");
   quick.push("lrs+10_1_ind=struct:indeg=on_100");
-  quick.push("lrs+10_1_ind=struct:indeg=on:fnrw=off_100");
+  // quick.push("lrs+10_1_ind=struct:indeg=on:fnrw=off_100");
   quick.push("lrs+10_1_ind=struct:drc=off:indeg=on:to=lpo_100");
   quick.push("lrs+10_1_drc=off_120");
-  quick.push("lrs+10_1_drc=off:fnrw=off_120");
+  // quick.push("lrs+10_1_drc=off:fnrw=off_120");
   quick.push("lrs+10_1_ind=struct:thsq=on:thsqr=20,5,1:thsqc=0,8_120");
   quick.push("lrs+10_1_ind=struct:drc=off:indgenh=off:to=lpo_250dis+1003_8_afr=on:anc=none:bd=preordered:ile=on:nm=64:newcnf=on:nwc=1:sas=z3:sac=on:sp=reverse_arity:updr=off:uhcvi=on_250");
   quick.push("lrs+1011_3:1_ind=struct:add=large:afr=on:afp=40000:afq=1.0:anc=none:cond=on:ile=on:irw=on:lma=on:lwlo=on:nm=64:nwc=1.1:sas=z3:sac=on:updr=off_250");
