@@ -1531,8 +1531,9 @@ SaturationAlgorithm* SaturationAlgorithm::createFromOptions(Problem& prb, const 
 
   //TODO here induction is last, is that right?
   GeneralInduction* induction = nullptr;
-  bool remodulation = true;
+  bool consGen = env.options->inductionConsequenceGeneration();
   InductionRemodulation* inductionRemodulation = nullptr;
+  InductionForwardRewriting* inductionRewriting = nullptr;
   if(opt.induction()!=Options::Induction::NONE){
     gie->addFront(new Induction());
     vvector<InductionSchemeGenerator*> generators;
@@ -1545,9 +1546,11 @@ SaturationAlgorithm* SaturationAlgorithm::createFromOptions(Problem& prb, const 
       }
     }
     induction = new GeneralInduction(generators, InferenceRule::INDUCTION_AXIOM);
-    if (remodulation) {
-      inductionRemodulation = new InductionRemodulation(induction);
+    if (consGen) {
+      inductionRemodulation = new InductionRemodulation();
       gie->addFront(inductionRemodulation);
+      inductionRewriting = new InductionForwardRewriting();
+      gie->addFront(inductionRewriting);
     }
     gie->addFront(induction);
     // since indhrw relies on induction, we create this
@@ -1672,8 +1675,8 @@ SaturationAlgorithm* SaturationAlgorithm::createFromOptions(Problem& prb, const 
   }
 #endif
 
-  if (remodulation && env.options->induction()!=Options::Induction::NONE) {
-    res->setGeneratingInferenceEngine(new InductionSGIWrapper(induction, inductionRemodulation, sgi));
+  if (consGen && env.options->induction()!=Options::Induction::NONE) {
+    res->setGeneratingInferenceEngine(new InductionSGIWrapper(induction, inductionRemodulation, sgi, inductionRewriting));
   } else {
     res->setGeneratingInferenceEngine(sgi);
   }
@@ -1792,6 +1795,10 @@ ImmediateSimplificationEngine* SaturationAlgorithm::createISE(Problem& prb, cons
   CALL("MainLoop::createImmediateSE");
 
   CompositeISE* res=new CompositeISE();
+
+  if (env.options->inductionConsequenceGeneration()) {
+    res->addFront(new InductionRemodulationSubsumption());
+  }
 
   if(prb.hasEquality() && opt.equationalTautologyRemoval()) {
     res->addFront(new EquationalTautologyRemoval());

@@ -1242,7 +1242,7 @@ void Options::init()
             _inductionOnComplexTermsHeur.tag(OptionTag::INFERENCES);
             _lookup.insert(&_inductionOnComplexTermsHeur);
 
-            _inductionHypRewriting = BoolOptionValue("induction_hypothesis_rewriting","indhrw",true);
+            _inductionHypRewriting = BoolOptionValue("induction_hypothesis_rewriting","indhrw",false);
             _inductionHypRewriting.description = "Rewrite with induction hypotheses (possibly against the ordering) and perform induction on the result";
             _inductionHypRewriting.tag(OptionTag::INFERENCES);
             _lookup.insert(&_inductionHypRewriting);
@@ -1260,7 +1260,7 @@ void Options::init()
             _inductionExhaustiveGeneration.reliesOn(_structInduction.is(equal(StructuralInductionKind::REC_DEF)));
             _lookup.insert(&_inductionExhaustiveGeneration);
 
-            _functionDefinitionRewriting = BoolOptionValue("function_definition_rewriting","fnrw",true);
+            _functionDefinitionRewriting = BoolOptionValue("function_definition_rewriting","fnrw",false);
             _functionDefinitionRewriting.description = "Use function definitions as rewrite rules with the intended orientation rather than the term ordering one";
             _functionDefinitionRewriting.tag(OptionTag::INFERENCES);
             _lookup.insert(&_functionDefinitionRewriting);
@@ -1277,6 +1277,18 @@ void Options::init()
             _integerInductionInterval.tag(OptionTag::INFERENCES);
             _integerInductionInterval.reliesOn(Or(_induction.is(equal(Induction::INTEGER)),_induction.is(equal(Induction::BOTH))));
             _lookup.insert(&_integerInductionInterval);
+
+            _inductionBinaryResolveGenerated = BoolOptionValue("induction_binary_resolve_generated","indbrg",true);
+            _inductionBinaryResolveGenerated.description = "Binary resolve the generated clauses with the given clause (prohibits using induction formula twice)";
+            _inductionBinaryResolveGenerated.tag(OptionTag::INFERENCES);
+            _inductionBinaryResolveGenerated.reliesOn(_induction.is(notEqual(Induction::NONE)));
+            _lookup.insert(&_inductionBinaryResolveGenerated);
+
+            _inductionConsequenceGeneration = BoolOptionValue("induction_consequence_generation","indcg",false);
+            _inductionConsequenceGeneration.description = "Generate consequences (without ordering constraints) for induction goals";
+            _inductionConsequenceGeneration.tag(OptionTag::INFERENCES);
+            _inductionConsequenceGeneration.reliesOn(_induction.is(notEqual(Induction::NONE)));
+            _lookup.insert(&_inductionConsequenceGeneration);
 
 	    _instantiation = ChoiceOptionValue<Instantiation>("instantiation","inst",Instantiation::OFF,{"off","on"});
 	    _instantiation.description = "Heuristically instantiate variables. Often wastes a lot of effort. Consider using thi instead.";

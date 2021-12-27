@@ -199,7 +199,8 @@ void RemodulationLHSIndex::handleClause(Clause* c, bool adding)
 
   // TimeCounter tc(TC_FORWARD_DEMODULATION_INDEX_MAINTENANCE);
 
-  Literal* lit=(*c)[0];
+  for (unsigned i = 0; i < c->length(); i++) {
+  Literal* lit=(*c)[i];
   TermIterator lhsi=EqHelper::getLHSIterator(lit, _ord);
   while (lhsi.hasNext()) {
     auto lhs = lhsi.next();
@@ -207,7 +208,6 @@ void RemodulationLHSIndex::handleClause(Clause* c, bool adding)
     if (!rhs.containsAllVariablesOf(lhs)) {
       continue;
     }
-    // cout << "REMIND " << *lit << " " << rhs << " " << adding << endl;
     NonVariableIterator stit(lhs.term());
     bool found = false;
     while (stit.hasNext()) {
@@ -228,6 +228,7 @@ void RemodulationLHSIndex::handleClause(Clause* c, bool adding)
     else {
       _is->remove(rhs, lit, c);
     }
+  }
   }
 }
 

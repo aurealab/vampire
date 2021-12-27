@@ -425,4 +425,17 @@ void UnitIntegerComparisonLiteralIndex::handleClause(Clause* c, bool adding)
   }
 }
 
+void InductionRemodulationLiteralIndex::handleClause(Clause* c, bool adding)
+{
+  CALL("InductionRemodulationLiteralIndex::handleClause");
+
+  if (!c->isInductionLemma()) {
+    return;
+  }
+
+  for(unsigned i = 0; i < c->length(); i++) {
+    handleLiteral((*c)[i], c, adding);
+  }
+}
+
 }

@@ -779,6 +779,8 @@ vstring Kernel::ruleName(InferenceRule rule)
     return "induction hypothesis rewriting";
   case InferenceRule::INDUCTION_REMODULATION:
     return "induction remodulation";
+  case InferenceRule::INDUCTION_FORWARD_REWRITING:
+    return "induction forward rewriting";
   case InferenceRule::CONSTRAINED_SUPERPOSITION:
     return "constrained superposition";
   case InferenceRule::EQUALITY_FACTORING:

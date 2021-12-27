@@ -312,6 +312,11 @@ Index* IndexManager::create(IndexType t)
     res=new InductionInequalitySubtermIndex(tis);
     isGenerating = true;
     break;
+  case INDUCTION_REMODULATION_LITERAL_INDEX:
+    is=new LiteralSubstitutionTree();
+    res=new InductionRemodulationLiteralIndex(is);
+    isGenerating = false;
+    break;
 
   default:
     INVALID_OPERATION("Unsupported IndexType.");

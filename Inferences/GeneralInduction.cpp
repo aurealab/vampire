@@ -16,6 +16,7 @@
 #include "Kernel/Signature.hpp"
 #include "Kernel/Unit.hpp"
 #include "Kernel/Inference.hpp"
+#include "Kernel/Matcher.hpp"
 #include "Kernel/Formula.hpp"
 #include "Kernel/FormulaUnit.hpp"
 #include "Kernel/FormulaVarIterator.hpp"
@@ -98,23 +99,26 @@ ClauseIterator GeneralInduction::generateClauses(Clause* premise)
   return pvi(res);
 }
 
-bool compatibleOccurrences(const OccurrenceMap& o, const OccurrenceMap& with) {
-  for (const auto& kv : o._m) {
-    auto it = with._m.find(kv.first);
-    if (it != with._m.end()) { // only check ones that are marked in 'with'
-      auto o1 = kv.second;
-      auto o2 = it->second;
-      for (unsigned i = 0; i < o1.num_bits(); i++) {
-        auto b1 = o1.pop_last();
-        auto b2 = o2.pop_last();
-        if (b2 && !b1) {
-          return false;
-        }
+bool isRedundant(Literal* l, DHSet<RemodulationInfo>* rinfos, Ordering& ord) {
+  if (!rinfos) {
+    return false;
+  }
+  DHSet<RemodulationInfo>::Iterator it(*rinfos);
+  while (it.hasNext()) {
+    auto eq = it.next()._eq;
+    auto lhsIt = EqHelper::getLHSIterator(eq, ord);
+    ASS(lhsIt.hasNext());
+    TermList lhs = lhsIt.next();
+    ASS(!lhsIt.hasNext());
+    SubtermIterator sti(l);
+    while (sti.hasNext()) {
+      auto t = sti.next();
+      if (MatchingUtils::matchTerms(lhs, t)) {
+        return true;
       }
-      ASS_EQ(o1.num_bits(), o2.num_bits());
     }
   }
-  return true;
+  return false;
 }
 
 void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Literal* literal)
@@ -130,11 +134,6 @@ void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Li
 
   auto pairs = selectMainSidePairs(literal, premise);
 
-  RemodulationInfo* rinfo = nullptr;
-  if (premise->inference().rule() == InferenceRule::INDUCTION_REMODULATION) {
-    rinfo = static_cast<RemodulationInfo*>(premise->getRemodulationInfo());
-  }
-
   for (auto& gen : _gen) {
     for (const auto& kv : pairs) {
       const auto& main = kv.first;
@@ -145,18 +144,6 @@ void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Li
 
       vvector<pair<Literal*, vset<Literal*>>> schLits;
       for (auto& kv : schOccMap) {
-        if (rinfo && !rinfo->_allowed.empty()) {
-          auto found = false;
-          for (const auto& kv2 : kv.first.inductionTerms()) {
-            if (rinfo->_allowed.count(kv2.first)) {
-              found = true;
-              break;
-            }
-          }
-          if (!found) {
-            continue;
-          }
-        }
         // Retain side literals for further processing if:
         // (1) they contain some induction term from the current scheme
         // (2) they have either induction depth 0 or they contain some complex induction term
@@ -200,21 +187,29 @@ void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Li
         }
         while (g->hasNext()) {
           auto eg = g->next();
-          if (rinfo && !compatibleOccurrences(eg, rinfo->_om)) {
-            continue;
-          }
           // create the generalized literals by replacing the current
           // set of occurrences of induction terms by the variables
           TermOccurrenceReplacement tr(kv.first.inductionTerms(), eg, main.literal);
           auto mainLitGen = tr.transformLit();
           ASS_NEQ(mainLitGen, main.literal); // main literal should be inducted on
+          if (isRedundant(mainLitGen, static_cast<DHSet<RemodulationInfo>*>(main.clause->getRemodulationInfo()), _salg->getOrdering())) {
+            continue;
+          }
           vvector<pair<Literal*, SLQueryResult>> sidesGeneralized;
+          bool redundant = false;
           for (const auto& kv2 : sidesFiltered) {
             TermOccurrenceReplacement tr(kv.first.inductionTerms(), eg, kv2.first);
             auto sideLitGen = tr.transformLit();
             if (sideLitGen != kv2.first) { // side literals may be discarded if they contain no induction term occurrence
+              if (isRedundant(sideLitGen, static_cast<DHSet<RemodulationInfo>*>(kv2.second->getRemodulationInfo()), _salg->getOrdering())) {
+                redundant = true;
+                break;
+              }
               sidesGeneralized.push_back(make_pair(sideLitGen, SLQueryResult(kv2.first, kv2.second)));
             }
+          }
+          if (redundant) {
+            continue;
           }
           generateClauses(kv.first, mainLitGen, main, std::move(sidesGeneralized), res._clauses);
         }
@@ -378,17 +373,19 @@ void GeneralInduction::generateClauses(
         c->inference().addToInductionInfo(v);
       }
     }
-    c = BinaryResolution::generateClause(c, mainLit, mainQuery, *env.options);
-    ASS(c);
-    if (_splitter && !sideLitQrPairs.empty()) {
-      _splitter->onNewClause(c);
-    }
-    unsigned i = 0;
-    for (const auto& kv : sideLitQrPairs) {
-      c = BinaryResolution::generateClause(c, kv.first, kv.second, *env.options);
+    if (env.options->inductionBinaryResolveGenerated()) {
+      c = BinaryResolution::generateClause(c, mainLit, mainQuery, *env.options);
       ASS(c);
-      if (_splitter && ++i < sideLitQrPairs.size()) {
+      if (_splitter && !sideLitQrPairs.empty()) {
         _splitter->onNewClause(c);
+      }
+      unsigned i = 0;
+      for (const auto& kv : sideLitQrPairs) {
+        c = BinaryResolution::generateClause(c, kv.first, kv.second, *env.options);
+        ASS(c);
+        if (_splitter && ++i < sideLitQrPairs.size()) {
+          _splitter->onNewClause(c);
+        }
       }
     }
     if(env.options->showInduction()){

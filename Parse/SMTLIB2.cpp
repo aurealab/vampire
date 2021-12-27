@@ -978,7 +978,12 @@ void SMTLIB2::readDefineFun(const vstring& name, LExprList* iArgs, LExpr* oSort,
 
   Formula* fla = new AtomicFormula(Literal::createEquality(true,lhs,rhs,rangeSort), true /*isFunctionDefinition*/);
 
-  FormulaUnit* fu = new FormulaUnit(fla, FromInput(UnitInputType::ASSUMPTION));
+  FormulaUnit* fu;
+  // if (env.options->functionDefinitionRewriting()) {
+    fu = new FormulaUnit(fla, FromInput(UnitInputType::ASSUMPTION));
+  // } else {
+  //   fu = new FormulaUnit(fla, Inference(TheoryAxiom(InferenceRule::EXTERNAL_THEORY_AXIOM)));
+  // }
 
   UnitList::push(fu, _formulas);
 }

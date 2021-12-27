@@ -14,28 +14,11 @@
 
 #include "Debug/RuntimeStatistics.hpp"
 
-// #include "Lib/DHSet.hpp"
-// #include "Lib/Environment.hpp"
-// #include "Lib/Int.hpp"
 #include "Lib/Metaiterators.hpp"
-// #include "Lib/TimeCounter.hpp"
-// #include "Lib/Timer.hpp"
-// #include "Lib/VirtualIterator.hpp"
 
-// #include "Kernel/Clause.hpp"
 #include "Kernel/EqHelper.hpp"
-// #include "Kernel/Inference.hpp"
-// #include "Kernel/Ordering.hpp"
-// #include "Kernel/Renaming.hpp"
 #include "Kernel/SortHelper.hpp"
-// #include "Kernel/Term.hpp"
 #include "Kernel/TermIterators.hpp"
-// #include "Kernel/ColorHelper.hpp"
-// #include "Kernel/RobSubstitution.hpp"
-
-// #include "Indexing/Index.hpp"
-// #include "Indexing/IndexManager.hpp"
-// #include "Indexing/TermIndex.hpp"
 
 #include "Saturation/SaturationAlgorithm.hpp"
 
@@ -214,7 +197,7 @@ ClauseIterator InductionRemodulation::generateClauses(Clause* premise)
   CALL("InductionRemodulation::generateClauses");
   ClauseIterator res1 = ClauseIterator::getEmpty();
 
-  if (InductionHelper::isInductionClause(premise)) {
+  if (InductionHelper::isInductionClause(premise) && InductionHelper::isInductionLiteral((*premise)[0])) {
     // forward result
     auto it1 = premise->getLiteralIterator();
     auto it2 = getFilteredIterator(it1, InductionLiteralsFn());
@@ -238,41 +221,19 @@ ClauseIterator InductionRemodulation::generateClauses(Clause* premise)
   return pvi( it7 );
 }
 
-OccurrenceMap buildOccurrenceMap(const vset<Term*> allowed, Literal* l, const vset<Term*>& rwTerms) {
-  OccurrenceMap om;
-  Stack<pair<Term*, bool>> todos;
-  for (unsigned i = 0; i < l->arity(); i++) {
-    todos.push(make_pair(l->nthArgument(i)->term(),false));
-  }
-  while (todos.isNonEmpty()) {
-    auto kv = todos.pop();
-    if (rwTerms.count(kv.first)) {
-      kv.second = true;
-    }
-    if (allowed.count(kv.first)) {
-      ASS(!rwTerms.count(kv.first));
-      om.add(l, kv.first, kv.second);
-    }
-    for (unsigned i = 0; i < kv.first->arity(); i++) {
-      todos.push(make_pair(kv.first->nthArgument(i)->term(), kv.second));
-    }
-  }
-  om.finalize();
-  return om;
-}
-
 ClauseIterator InductionRemodulation::perform(
     Clause* rwClause, Literal* rwLit, TermList rwTerm,
     Clause* eqClause, Literal* eqLit, TermList eqLHS,
     ResultSubstitutionSP subst, bool eqIsResult, UnificationConstraintStackSP constraints)
 {
   CALL("InductionRemodulation::perform");
+  ASS(env.options->inductionGen());
   TimeCounter tc(TC_REMODULATION);
   // we want the rwClause and eqClause to be active
   // ASS(rwClause->store()==Clause::ACTIVE);
   ASS(eqClause->store()==Clause::ACTIVE);
 
-  // cout << "performSuperposition with " << rwClause->toString() << " and " << eqClause->toString() << endl;
+  // cout << "performRemodulation with " << rwClause->toString() << " and " << eqClause->toString() << endl;
   //   cout << "rwTerm " << rwTerm.toString() << " eqLHS " << eqLHS.toString() << endl;
   //   // cout << "subst " << endl << subst->tryGetRobSubstitution()->toString() << endl;
   //   cout << "eqIsResult " << eqIsResult << endl;
@@ -281,9 +242,10 @@ ClauseIterator InductionRemodulation::perform(
   bool hasConstraints = !constraints.isEmpty() && !constraints->isEmpty();
 
   unsigned rwLength = rwClause->length();
-  ASS_EQ(eqClause->length(), 1);
+  // ASS_EQ(eqClause->length(), 1);
+  unsigned eqLength = eqClause->length();
   unsigned conLength = hasConstraints ? constraints->size() : 0;
-  unsigned newLength = rwLength + conLength;
+  unsigned newLength = rwLength + (eqLength - 1) + conLength;
 
   ClauseIterator res = ClauseIterator::getEmpty();
   if (eqLHS.isVar()) {
@@ -296,68 +258,34 @@ ClauseIterator InductionRemodulation::perform(
 
   TermList tgtTerm = EqHelper::getOtherEqualitySide(eqLit, eqLHS);
   TermList tgtTermS = eqIsResult ? subst->applyToBoundResult(tgtTerm) : subst->applyToBoundQuery(tgtTerm);
+  Literal* eqLitS = eqIsResult ? subst->applyToBoundResult(eqLit) : subst->applyToBoundQuery(eqLit);
 
   if(!Ordering::isGorGEorE(_salg->getOrdering().compare(tgtTermS,rwTerm))) {
     return res;
   }
 
-  vset<Term*> newAllowed;
-  NonVariableIterator stit(tgtTerm.term());
-  // cout << "NEWALLOWED ";
-  while (stit.hasNext()) {
-    auto st = stit.next();
-    auto t = (eqIsResult ? subst->applyToBoundResult(st) : subst->applyToBoundQuery(st)).term();
-    // cout << *t << " ";
-    newAllowed.insert(t);
-  }
-  // cout << endl;
-  vset<Term*> allowed;
-  vset<Term*> rewrites;
-  if (rwClause->inference().rule() == InferenceRule::INDUCTION_REMODULATION) {
-    auto ptr = static_cast<RemodulationInfo*>(rwClause->getRemodulationInfo());
-    if (ptr) {
-      // cout << "ALLOWED ";
-      for (const auto& e : ptr->_allowed) {
-        // cout << *e << " ";
-        if (e != rwTerm.term() && !e->containsSubterm(rwTerm)) {
-          allowed.insert(e);
-        }
-      }
-      rewrites = ptr->_rewrites;
-      // cout << endl;
-    }
-  }
-  rewrites.insert(tgtTermS.term());
-  vset<Term*> newAllowed2;
-  if (!allowed.empty()) {
-    for (const auto& e : allowed) {
-      if (newAllowed.count(e)) {
-        newAllowed2.insert(e);
-      }
-    }
-  } else {
-    newAllowed2 = newAllowed;
-  }
-
-  if (newAllowed2.empty()) {
-    return res;
-  }
+  // we should only do the redundancy check if one side is possibly rewritten
+  // and the other side doesn't contain the tgtTermS already (since we are
+  // rewriting the occurrences one-by-one)
+  bool shouldCheckRedundancy = rwLit->isEquality() &&
+    ((rwTerm==*rwLit->nthArgument(0) && !rwLit->nthArgument(1)->containsSubterm(tgtTermS)) ||
+     (rwTerm==*rwLit->nthArgument(1) && !rwLit->nthArgument(0)->containsSubterm(tgtTermS)));
 
   LiteralSubsetReplacement2 subsetReplacement(rwLit, rwTerm.term(), tgtTermS);
-  Literal* ilit = nullptr;
-  while ((ilit = subsetReplacement.transformSubset())) {
+  Literal* tgtLit = nullptr;
+  while ((tgtLit = subsetReplacement.transformSubset())) {
     Inference inf(GeneratingInference2(InferenceRule::INDUCTION_REMODULATION, rwClause, eqClause));
     Inference::Destroyer inf_destroyer(inf);
 
     // cout << "LIT " << *ilit << endl;
-    if(EqHelper::isEqTautology(ilit)) {
+    if(EqHelper::isEqTautology(tgtLit)) {
       continue;
     }
 
     inf_destroyer.disable(); // ownership passed to the the clause below
     Clause* newCl = new(newLength) Clause(newLength, inf);
 
-    (*newCl)[0] = ilit;
+    (*newCl)[0] = tgtLit;
     int next = 1;
     for(unsigned i=0;i<rwLength;i++) {
       Literal* curr=(*rwClause)[i];
@@ -366,12 +294,32 @@ ClauseIterator InductionRemodulation::perform(
       }
     }
 
+    auto rinfos = RemodulationInfo::update(newCl, tgtLit,
+      static_cast<DHSet<RemodulationInfo>*>(rwClause->getRemodulationInfo()), _salg->getOrdering());
+
+    // The following case has to be checked to decide that
+    // this rewrite makes the new clauses redundant or not
+    //
+    // since we only rewrite one occurrence of rwTerm, the case
+    // we are looking for is when one side is tgtTermS and the
+    // other is unchanged
+    if (!shouldCheckRedundancy ||
+      (tgtTermS!=*tgtLit->nthArgument(0) && tgtTermS!=*tgtLit->nthArgument(1)))
+    {
+      RemodulationInfo rinfo;
+      rinfo._eq = eqLit;
+      rinfo._eqGr = eqLitS;
+      rinfos->insert(rinfo);
+    }
+    // TODO: if -av=off, we should check also that the rest of rwClause is greater than the eqClause
+    // TODO: check in non-generalized case that
+
+    if (rinfos->isEmpty()) {
+      delete rinfos;
+    } else {
+      newCl->setRemodulationInfo(rinfos);
+    }
     newCl->setInductionLemma(true);
-    auto rinfo = new RemodulationInfo();
-    rinfo->_allowed = newAllowed2;
-    rinfo->_rewrites = rewrites;
-    rinfo->_om = buildOccurrenceMap(newAllowed2, ilit, rewrites);
-    newCl->setRemodulationInfo(rinfo);
     res = pvi(getConcatenatedIterator(res, getSingletonIterator(newCl)));
   }
 

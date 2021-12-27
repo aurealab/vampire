@@ -2196,6 +2196,8 @@ public:
   bool functionDefinitionRewriting() const { return _functionDefinitionRewriting.actualValue; }
   bool integerInductionDefaultBound() const { return _integerInductionDefaultBound.actualValue; }
   IntegerInductionInterval integerInductionInterval() const { return _integerInductionInterval.actualValue; }
+  bool inductionBinaryResolveGenerated() const { return _inductionBinaryResolveGenerated.actualValue; }
+  bool inductionConsequenceGeneration() const { return _inductionConsequenceGeneration.actualValue; }
 
   float instGenBigRestartRatio() const { return _instGenBigRestartRatio.actualValue; }
   bool instGenPassiveReactivation() const { return _instGenPassiveReactivation.actualValue; }
@@ -2501,6 +2503,8 @@ private:
   BoolOptionValue _functionDefinitionRewriting;
   BoolOptionValue _integerInductionDefaultBound;
   ChoiceOptionValue<IntegerInductionInterval> _integerInductionInterval;
+  BoolOptionValue _inductionBinaryResolveGenerated;
+  BoolOptionValue _inductionConsequenceGeneration;
 
   StringOptionValue _latexOutput;
   BoolOptionValue _latexUseDefaultSymbols;
