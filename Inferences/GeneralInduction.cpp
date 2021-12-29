@@ -16,7 +16,6 @@
 #include "Kernel/Signature.hpp"
 #include "Kernel/Unit.hpp"
 #include "Kernel/Inference.hpp"
-#include "Kernel/Matcher.hpp"
 #include "Kernel/Formula.hpp"
 #include "Kernel/FormulaUnit.hpp"
 #include "Kernel/FormulaVarIterator.hpp"
@@ -99,28 +98,6 @@ ClauseIterator GeneralInduction::generateClauses(Clause* premise)
   return pvi(res);
 }
 
-bool isRedundant(Literal* l, DHSet<RemodulationInfo>* rinfos, Ordering& ord) {
-  if (!rinfos) {
-    return false;
-  }
-  DHSet<RemodulationInfo>::Iterator it(*rinfos);
-  while (it.hasNext()) {
-    auto eq = it.next()._eq;
-    auto lhsIt = EqHelper::getLHSIterator(eq, ord);
-    ASS(lhsIt.hasNext());
-    TermList lhs = lhsIt.next();
-    ASS(!lhsIt.hasNext());
-    SubtermIterator sti(l);
-    while (sti.hasNext()) {
-      auto t = sti.next();
-      if (MatchingUtils::matchTerms(lhs, t)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Literal* literal)
 {
   CALL("GeneralInduction::process");
@@ -192,7 +169,9 @@ void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Li
           TermOccurrenceReplacement tr(kv.first.inductionTerms(), eg, main.literal);
           auto mainLitGen = tr.transformLit();
           ASS_NEQ(mainLitGen, main.literal); // main literal should be inducted on
-          if (isRedundant(mainLitGen, static_cast<DHSet<RemodulationInfo>*>(main.clause->getRemodulationInfo()), _salg->getOrdering())) {
+          if (RemodulationInfo::isRedundant(mainLitGen,
+                static_cast<DHSet<RemodulationInfo>*>(main.clause->getRemodulationInfo()),
+                _salg->getOrdering())) {
             continue;
           }
           vvector<pair<Literal*, SLQueryResult>> sidesGeneralized;
@@ -201,7 +180,9 @@ void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Li
             TermOccurrenceReplacement tr(kv.first.inductionTerms(), eg, kv2.first);
             auto sideLitGen = tr.transformLit();
             if (sideLitGen != kv2.first) { // side literals may be discarded if they contain no induction term occurrence
-              if (isRedundant(sideLitGen, static_cast<DHSet<RemodulationInfo>*>(kv2.second->getRemodulationInfo()), _salg->getOrdering())) {
+              if (RemodulationInfo::isRedundant(sideLitGen,
+                    static_cast<DHSet<RemodulationInfo>*>(kv2.second->getRemodulationInfo()),
+                    _salg->getOrdering())) {
                 redundant = true;
                 break;
               }
@@ -517,9 +498,9 @@ vvector<pair<SLQueryResult, vset<pair<Literal*,Clause*>>>> GeneralInduction::sel
   while (it.hasNext())
   {
     auto qr = it.next();
-    if (qr.clause->isInductionLemma()) {
-      continue;
-    }
+    // if (qr.clause->isInductionLemma()) {
+    //   continue;
+    // }
     // query is side literal
     if (indLit && InductionHelper::isInductionClause(qr.clause) && sideLitCondition(literal, premise, qr.literal, qr.clause))
     {

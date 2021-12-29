@@ -1531,7 +1531,7 @@ SaturationAlgorithm* SaturationAlgorithm::createFromOptions(Problem& prb, const 
 
   //TODO here induction is last, is that right?
   GeneralInduction* induction = nullptr;
-  bool consGen = env.options->inductionConsequenceGeneration();
+  bool consGen = env.options->inductionConsequenceGeneration()!=Options::InductionConsequenceGeneration::OFF;
   InductionRemodulation* inductionRemodulation = nullptr;
   InductionForwardRewriting* inductionRewriting = nullptr;
   if(opt.induction()!=Options::Induction::NONE){
@@ -1796,7 +1796,7 @@ ImmediateSimplificationEngine* SaturationAlgorithm::createISE(Problem& prb, cons
 
   CompositeISE* res=new CompositeISE();
 
-  if (env.options->inductionConsequenceGeneration()) {
+  if (env.options->inductionConsequenceGeneration()!=Options::InductionConsequenceGeneration::OFF) {
     res->addFront(new InductionRemodulationSubsumption());
   }
 

@@ -1284,7 +1284,8 @@ void Options::init()
             _inductionBinaryResolveGenerated.reliesOn(_induction.is(notEqual(Induction::NONE)));
             _lookup.insert(&_inductionBinaryResolveGenerated);
 
-            _inductionConsequenceGeneration = BoolOptionValue("induction_consequence_generation","indcg",false);
+            _inductionConsequenceGeneration = ChoiceOptionValue<InductionConsequenceGeneration>("induction_consequence_generation","indcg",
+                                                InductionConsequenceGeneration::OFF, {"off", "unit_only", "on"});
             _inductionConsequenceGeneration.description = "Generate consequences (without ordering constraints) for induction goals";
             _inductionConsequenceGeneration.tag(OptionTag::INFERENCES);
             _inductionConsequenceGeneration.reliesOn(_induction.is(notEqual(Induction::NONE)));

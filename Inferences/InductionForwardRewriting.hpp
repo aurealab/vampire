@@ -18,6 +18,8 @@
 #include "Forwards.hpp"
 #include "Indexing/TermIndex.hpp"
 
+#include "Saturation/SaturationAlgorithm.hpp"
+
 namespace Inferences {
 
 using namespace Kernel;
@@ -34,13 +36,17 @@ public:
   void attach(SaturationAlgorithm* salg) override
   {
     GeneratingInferenceEngine::attach(salg);
-    _index=static_cast<DemodulationLHSIndex*>(
-      _salg->getIndexManager()->request(DEMODULATION_LHS_SUBST_TREE));
+    _index=static_cast<RewritingLHSIndex*>(
+      _salg->getIndexManager()->request(REWRITING_LHS_INDEX));
+    _tindex=static_cast<RemodulationSubtermIndex*>(
+      _salg->getIndexManager()->request(REMODULATION_SUBTERM_INDEX));
   }
   void detach() override
   {
     _index=0;
-    _salg->getIndexManager()->release(DEMODULATION_LHS_SUBST_TREE);
+    _tindex = 0;
+    _salg->getIndexManager()->release(REMODULATION_SUBTERM_INDEX);
+    _salg->getIndexManager()->release(REWRITING_LHS_INDEX);
     GeneratingInferenceEngine::detach();
   }
   ClauseIterator generateClauses(Clause *premise) override;
@@ -49,13 +55,15 @@ private:
   static Clause *perform(
       Clause *rwClause, Literal *rwLiteral, TermList rwTerm,
       Clause *eqClause, Literal *eqLiteral, TermList eqLHS,
-      ResultSubstitutionSP subst, Ordering& ord);
+      ResultSubstitutionSP subst, bool eqIsResult, Ordering& ord);
 
   struct ForwardResultFn;
+  struct BackwardResultFn;
   struct RewriteableSubtermsFn;
   struct GeneralizationsFn;
 
-  DemodulationLHSIndex* _index;
+  RewritingLHSIndex* _index;
+  RemodulationSubtermIndex* _tindex;
 };
 
 }; // namespace Inferences

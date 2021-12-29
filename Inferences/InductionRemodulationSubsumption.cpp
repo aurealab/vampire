@@ -44,11 +44,11 @@ Clause* InductionRemodulationSubsumption::simplify(Clause* cl)
 {
   CALL("InductionRemodulationSubsumption::simplify");
 
-  if(!cl->isInductionLemma()) {
+  if(!cl->isInductionLemma() || cl->length() != 1) {
     return cl;
   }
 
-  ASS_EQ(cl->length(), 1);
+  // ASS_EQ(cl->length(), 1);
   auto rinfos = static_cast<DHSet<RemodulationInfo>*>(cl->getRemodulationInfo());
   Clause* res = cl;
   for (unsigned li = 0; li < cl->length(); li++) {

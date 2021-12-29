@@ -288,6 +288,7 @@ enum class InferenceRule : unsigned char {
   IH_REWRITING,
   INDUCTION_REMODULATION,
   INDUCTION_FORWARD_REWRITING,
+  FUNCTION_DEFINITION,
   /** superposition with constraints */
   CONSTRAINED_SUPERPOSITION,
   /** equality factoring inference */

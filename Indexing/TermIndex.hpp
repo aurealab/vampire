@@ -173,6 +173,20 @@ protected:
   void handleClause(Clause* c, bool adding);
 };
 
+class RemodulationSubtermIndex
+: public TermIndex
+{
+public:
+  CLASS_NAME(RemodulationSubtermIndex);
+  USE_ALLOCATOR(RemodulationSubtermIndex);
+
+  RemodulationSubtermIndex(TermIndexingStructure* is)
+  : TermIndex(is) {}
+
+protected:
+  void handleClause(Clause* c, bool adding);
+};
+
 /**
 + * Term index for remodulation (i.e. doing the reverse of demodulation)
 + */
@@ -185,6 +199,24 @@ public:
 
   RemodulationLHSIndex(TermIndexingStructure* is, Ordering& ord)
   : TermIndex(is), _ord(ord) {};
+protected:
+  void handleClause(Clause* c, bool adding);
+private:
+  Ordering& _ord;
+};
+
+/**
+ * Term index for general rewriting
+ */
+class RewritingLHSIndex
+: public TermIndex
+{
+public:
+  CLASS_NAME(RewritingLHSIndex);
+  USE_ALLOCATOR(RewritingLHSIndex);
+
+  RewritingLHSIndex(TermIndexingStructure* is, Ordering& ord)
+  : TermIndex(is), _ord(ord) {}
 protected:
   void handleClause(Clause* c, bool adding);
 private:

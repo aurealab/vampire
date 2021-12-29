@@ -25,7 +25,10 @@
 #include "InductionForwardRewriting.hpp"
 #include "InductionRemodulationSubsumption.hpp"
 #include "Indexing/LiteralSubstitutionTree.hpp"
+
 #include "Kernel/EqHelper.hpp"
+#include "Kernel/Matcher.hpp"
+
 #include "Lib/SharedSet.hpp"
 
 namespace Inferences
@@ -34,6 +37,17 @@ namespace Inferences
 using namespace Kernel;
 using namespace Indexing;
 using namespace Saturation;
+
+inline bool termHasAllVarsOfClause(TermList t, Clause* cl) {
+  auto vit = cl->getVariableIterator();
+  while (vit.hasNext()) {
+    auto v = vit.next();
+    if (!t.containsSubterm(TermList(v, false))) {
+      return false;
+    }
+  }
+  return true;
+}
 
 class LiteralSubsetReplacement2 : TermTransformer {
 public:
@@ -78,7 +92,7 @@ public:
     UnificationConstraintStackSP constraints);
 private:
   RemodulationLHSIndex* _lhsIndex;
-  InductionTermIndex* _termIndex;
+  RemodulationSubtermIndex* _termIndex;
 };
 
 class InductionSGIWrapper
@@ -142,18 +156,55 @@ struct RemodulationInfo {
       while (it.hasNext()) {
         auto rinfo = it.next();
         // we have to check that each greater side is contained
-        auto lhsIt = EqHelper::getLHSIterator(rinfo._eqGr, ord);
-        ASS(lhsIt.hasNext());
-        TermList lhs = lhsIt.next();
-        ASS(!lhsIt.hasNext());
+        auto lhs = RemodulationInfo::getLHS(rinfo._eqGr, ord);
         // TODO check also rest literals from rinfo
-        if (lit->containsSubterm(lhs)) {
-          res->insert(rinfo);
+        if (!lit->containsSubterm(lhs)) {
+          continue;
         }
+        // for now assume that with AVATAR the rest is
+        // given as assumptions
+        res->insert(rinfo);
       }
     }
     return res;
   }
+
+  static TermList getLHS(Literal* l, Ordering& ord) {
+    auto lhsIt = EqHelper::getLHSIterator(l, ord);
+    ASS(lhsIt.hasNext());
+    TermList lhs = lhsIt.next();
+    ASS(!lhsIt.hasNext());
+    return lhs;
+  }
+
+  static bool isRedundant(Literal* l, DHSet<RemodulationInfo>* rinfos, Ordering& ord) {
+    if (!rinfos) {
+      return false;
+    }
+    DHSet<RemodulationInfo>::Iterator it(*rinfos);
+    while (it.hasNext()) {
+      auto rinfo = it.next();
+      Literal* eq;
+      if (rinfo._rest.empty()) {
+        eq = rinfo._eq;
+      } else {
+        // if other literals stem from a remodulation, possibly
+        // with instantiated variables we can't check due to
+        // AVATAR, allow induction terms in variable positions
+        eq = rinfo._eqGr;
+      }
+      auto lhs = RemodulationInfo::getLHS(eq, ord);
+      SubtermIterator sti(l);
+      while (sti.hasNext()) {
+        auto t = sti.next();
+        if (MatchingUtils::matchTerms(lhs, t)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
 };
 
 }

@@ -67,8 +67,8 @@ void InductionRemodulation::attach(SaturationAlgorithm* salg)
   GeneratingInferenceEngine::attach(salg);
   _lhsIndex=static_cast<RemodulationLHSIndex*>(
 	  _salg->getIndexManager()->request(REMODULATION_LHS_SUBST_TREE) );
-  _termIndex=static_cast<InductionTermIndex*>(
-	  _salg->getIndexManager()->request(INDUCTION_TERM_INDEX) );
+  _termIndex=static_cast<RemodulationSubtermIndex*>(
+	  _salg->getIndexManager()->request(REMODULATION_SUBTERM_INDEX) );
 }
 
 void InductionRemodulation::detach()
@@ -77,7 +77,7 @@ void InductionRemodulation::detach()
   _lhsIndex = 0;
   _salg->getIndexManager()->release(REMODULATION_LHS_SUBST_TREE);
   _termIndex = 0;
-  _salg->getIndexManager()->release(INDUCTION_TERM_INDEX);
+  _salg->getIndexManager()->release(REMODULATION_SUBTERM_INDEX);
   GeneratingInferenceEngine::detach();
 }
 
@@ -105,14 +105,14 @@ struct RewriteableSubtermsFn
 
 struct RewritableResultsFn
 {
-  RewritableResultsFn(InductionTermIndex* index) : _index(index) {}
+  RewritableResultsFn(RemodulationSubtermIndex* index) : _index(index) {}
   VirtualIterator<pair<pair<Literal*, TermList>, TermQueryResult> > operator()(pair<Literal*, TermList> arg)
   {
     CALL("RewritableResultsFn()");
     return pvi( pushPairIntoRightIterator(arg, _index->getInstances(arg.second, true)) );
   }
 private:
-  InductionTermIndex* _index;
+  RemodulationSubtermIndex* _index;
 };
 
 
@@ -167,11 +167,12 @@ private:
 };
 
 struct ReverseLHSIteratorFn {
+  ReverseLHSIteratorFn(Clause* cl) : _cl(cl) {}
   VirtualIterator<pair<Literal*, TermList>> operator()(pair<Literal*, TermList> arg)
   {
     CALL("ReverseLHSIteratorFn()");
     auto rhs = EqHelper::getOtherEqualitySide(arg.first, arg.second);
-    if (!rhs.containsAllVariablesOf(arg.second)) {
+    if (!termHasAllVarsOfClause(rhs, _cl)) {
       return VirtualIterator<pair<Literal*, TermList>>::getEmpty();
     }
     NonVariableIterator stit(arg.second.term());
@@ -190,6 +191,8 @@ struct ReverseLHSIteratorFn {
     }
     return pvi(getSingletonIterator(make_pair(arg.first,rhs)));
   }
+private:
+  Clause* _cl;
 };
 
 ClauseIterator InductionRemodulation::generateClauses(Clause* premise)
@@ -208,10 +211,13 @@ ClauseIterator InductionRemodulation::generateClauses(Clause* premise)
 
   // backward result
   ClauseIterator res2 = ClauseIterator::getEmpty();
-  if (premise->length() == 1) {
+  if (premise->length() == 1 ||
+      (env.options->inductionConsequenceGeneration() == Options::InductionConsequenceGeneration::ON &&
+       (isFormulaTransformation(premise->inference().rule()) || premise->inference().rule() == InferenceRule::FUNCTION_DEFINITION)))
+  {
     auto itb1 = premise->getLiteralIterator();
     auto itb2 = getMapAndFlattenIterator(itb1,EqHelper::LHSIteratorFn(_salg->getOrdering()));
-    auto itb3 = getMapAndFlattenIterator(itb2,ReverseLHSIteratorFn());
+    auto itb3 = getMapAndFlattenIterator(itb2,ReverseLHSIteratorFn(premise));
     auto itb4 = getMapAndFlattenIterator(itb3,RewritableResultsFn(_termIndex));
     res2 = pvi(getMapAndFlattenIterator(itb4,BackwardResultFn(premise, *this)));
   }
@@ -260,7 +266,9 @@ ClauseIterator InductionRemodulation::perform(
   TermList tgtTermS = eqIsResult ? subst->applyToBoundResult(tgtTerm) : subst->applyToBoundQuery(tgtTerm);
   Literal* eqLitS = eqIsResult ? subst->applyToBoundResult(eqLit) : subst->applyToBoundQuery(eqLit);
 
-  if(!Ordering::isGorGEorE(_salg->getOrdering().compare(tgtTermS,rwTerm))) {
+  auto comp = _salg->getOrdering().compare(tgtTermS,rwTerm);
+  if (comp != Ordering::GREATER && comp != Ordering::GREATER_EQ) {
+    ASS_NEQ(comp, Ordering::INCOMPARABLE);
     return res;
   }
 
@@ -294,6 +302,27 @@ ClauseIterator InductionRemodulation::perform(
       }
     }
 
+    bool destroy = false;
+    vset<pair<Literal*,Literal*>> rest;
+    for (unsigned i = 0; i < eqLength; i++) {
+      Literal *curr = (*eqClause)[i];
+      if (curr != eqLit) {
+        Literal *currAfter = eqIsResult ? subst->applyToBoundResult(curr) : subst->applyToBoundQuery(curr);
+        rest.insert(make_pair(curr, currAfter));
+
+        if (EqHelper::isEqTautology(currAfter)) {
+          newCl->destroy();
+          destroy = true;
+          break;
+        }
+
+        (*newCl)[next++] = currAfter;
+      }
+    }
+    if (destroy) {
+      continue;
+    }
+
     auto rinfos = RemodulationInfo::update(newCl, tgtLit,
       static_cast<DHSet<RemodulationInfo>*>(rwClause->getRemodulationInfo()), _salg->getOrdering());
 
@@ -309,6 +338,7 @@ ClauseIterator InductionRemodulation::perform(
       RemodulationInfo rinfo;
       rinfo._eq = eqLit;
       rinfo._eqGr = eqLitS;
+      rinfo._rest = rest;
       rinfos->insert(rinfo);
     }
     // TODO: if -av=off, we should check also that the rest of rwClause is greater than the eqClause

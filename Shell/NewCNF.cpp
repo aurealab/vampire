@@ -1680,6 +1680,8 @@ Clause* NewCNF::toClause(SPGenClause gc, bool& fndef)
         temp = Inferences::EqualityResolution::tryResolveEquality(clause, (*clause)[i]);
       }
       if (temp) {
+        temp = Clause::fromIterator(Clause::Iterator(*temp),
+                                    GeneratingInference1(InferenceRule::FUNCTION_DEFINITION, temp));
         clause = temp;
         if (i < fi) {
           fi--;

@@ -46,6 +46,7 @@
 #include "DP/ShortConflictMetaDP.hpp"
 
 #include "Inferences/InductionHelper.hpp"
+#include "Inferences/InductionRemodulation.hpp"
 
 #include "SaturationAlgorithm.hpp"
 
@@ -1283,6 +1284,25 @@ Clause* Splitter::buildAndInsertComponentClause(SplitLevel name, unsigned size, 
         for (const auto& e : inductionInfo) {
           compCl->inference().addToInductionInfo(e);
         }
+      }
+    }
+    auto rinfos = static_cast<DHSet<RemodulationInfo>*>(orig->getRemodulationInfo());
+    if (rinfos && !rinfos->isEmpty()) {
+      DHSet<RemodulationInfo>::Iterator it(*rinfos);
+      auto rinfosNew = new DHSet<RemodulationInfo>();
+      while (it.hasNext()) {
+        auto rinfo = it.next();
+        for (unsigned i = 0; i < size; i++) {
+          auto lhs = RemodulationInfo::getLHS(rinfo._eqGr, _sa->getOrdering());
+          if (lits[i]->containsSubterm(lhs)) {
+            rinfosNew->insert(rinfo);
+          }
+        }
+      }
+      if (rinfosNew->isEmpty()) {
+        delete rinfosNew;
+      } else {
+        compCl->setRemodulationInfo(rinfosNew);
       }
     }
   } else {

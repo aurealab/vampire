@@ -193,11 +193,12 @@ void RemodulationLHSIndex::handleClause(Clause* c, bool adding)
 {
   CALL("RemodulationLHSIndex::handleClause");
 
-  if (c->length()!=1) {
+  if (c->length()!=1 &&
+    (env.options->inductionConsequenceGeneration() != Options::InductionConsequenceGeneration::ON ||
+     (!isFormulaTransformation(c->inference().rule()) || c->inference().rule() != InferenceRule::FUNCTION_DEFINITION)))
+  {
     return;
   }
-
-  // TimeCounter tc(TC_FORWARD_DEMODULATION_INDEX_MAINTENANCE);
 
   for (unsigned i = 0; i < c->length(); i++) {
   Literal* lit=(*c)[i];
@@ -205,7 +206,17 @@ void RemodulationLHSIndex::handleClause(Clause* c, bool adding)
   while (lhsi.hasNext()) {
     auto lhs = lhsi.next();
     auto rhs = EqHelper::getOtherEqualitySide(lit, lhs);
-    if (!rhs.containsAllVariablesOf(lhs)) {
+    // check if rhs contains all vars of clause
+    auto vit = c->getVariableIterator();
+    bool allVars = true;
+    while (vit.hasNext()) {
+      auto v = vit.next();
+      if (!rhs.containsSubterm(TermList(v, false))) {
+        allVars = false;
+        break;
+      }
+    }
+    if (!allVars) {
       continue;
     }
     NonVariableIterator stit(lhs.term());
@@ -232,6 +243,44 @@ void RemodulationLHSIndex::handleClause(Clause* c, bool adding)
   }
 }
 
+void RewritingLHSIndex::handleClause(Clause* c, bool adding)
+{
+  CALL("RewritingLHSIndex::handleClause");
+
+  if (c->length()!=1 &&
+    (env.options->inductionConsequenceGeneration() != Options::InductionConsequenceGeneration::ON ||
+     (!isFormulaTransformation(c->inference().rule()) || c->inference().rule() != InferenceRule::FUNCTION_DEFINITION)))
+  {
+    return;
+  }
+
+  for (unsigned i = 0; i < c->length(); i++) {
+    Literal* lit=(*c)[i];
+    TermIterator lhsi=EqHelper::getLHSIterator(lit, _ord);
+    while (lhsi.hasNext()) {
+      auto lhs = lhsi.next();
+      auto vit = c->getVariableIterator();
+      bool allVars = true;
+      while (vit.hasNext()) {
+        auto v = vit.next();
+        if (!lhs.containsSubterm(TermList(v, false))) {
+          allVars = false;
+          break;
+        }
+      }
+      if (!allVars) {
+        continue;
+      }
+      // cout << *c << " " << lhs << endl;
+      if (adding) {
+        _is->insert(lhs, lit, c);
+      }
+      else {
+        _is->remove(lhs, lit, c);
+      }
+    }
+  }
+}
 
 template <bool combinatorySupSupport>
 void DemodulationSubtermIndexImpl<combinatorySupSupport>::handleClause(Clause* c, bool adding)
@@ -329,6 +378,39 @@ void InductionTermIndex::handleClause(Clause* c, bool adding)
             }
           }
         }
+      }
+    }
+  }
+}
+
+void RemodulationSubtermIndex::handleClause(Clause* c, bool adding)
+{
+  CALL("RemodulationSubtermIndex::handleClause");
+
+  if (!InductionHelper::isInductionClause(c)) {
+    return;
+  }
+
+  static DHSet<TermList> inserted;
+
+  for (unsigned i=0;i<c->length();i++) {
+    Literal* lit = (*c)[i];
+    if (!InductionHelper::isInductionLiteral(lit)) {
+      continue;
+    }
+    inserted.reset();
+    SubtermIterator it(lit);
+    while (it.hasNext()) {
+      TermList tl = it.next();
+      if (!inserted.insert(tl)) {
+        it.right();
+        continue;
+      }
+      ASS(tl.isTerm());
+      if (adding) {
+        _is->insert(tl, lit, c);
+      } else {
+        _is->remove(tl, lit, c);
       }
     }
   }
