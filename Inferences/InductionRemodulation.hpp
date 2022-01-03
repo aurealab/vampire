@@ -49,6 +49,12 @@ inline bool termHasAllVarsOfClause(TermList t, Clause* cl) {
   return true;
 }
 
+inline bool canUseForRewrite(Clause* cl) {
+  return cl->length() == 1 ||
+    (env.options->inductionConsequenceGeneration() == Options::InductionConsequenceGeneration::ON &&
+    (isFormulaTransformation(cl->inference().rule()) || cl->inference().rule() == InferenceRule::FUNCTION_DEFINITION));
+}
+
 class LiteralSubsetReplacement2 : TermTransformer {
 public:
   LiteralSubsetReplacement2(Literal* lit, Term* o, TermList r)

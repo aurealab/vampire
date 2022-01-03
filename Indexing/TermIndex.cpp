@@ -16,6 +16,7 @@
 #include "Lib/DHMap.hpp"
 
 #include "Inferences/InductionHelper.hpp"
+#include "Inferences/InductionRemodulation.hpp"
 
 #include "Kernel/ApplicativeHelper.hpp"
 #include "Kernel/Clause.hpp"
@@ -193,10 +194,7 @@ void RemodulationLHSIndex::handleClause(Clause* c, bool adding)
 {
   CALL("RemodulationLHSIndex::handleClause");
 
-  if (c->length()!=1 &&
-    (env.options->inductionConsequenceGeneration() != Options::InductionConsequenceGeneration::ON ||
-     (!isFormulaTransformation(c->inference().rule()) || c->inference().rule() != InferenceRule::FUNCTION_DEFINITION)))
-  {
+  if (!canUseForRewrite(c)) {
     return;
   }
 
@@ -219,19 +217,21 @@ void RemodulationLHSIndex::handleClause(Clause* c, bool adding)
     if (!allVars) {
       continue;
     }
-    NonVariableIterator stit(lhs.term());
-    bool found = false;
-    while (stit.hasNext()) {
-      auto st = stit.next();
-      if (InductionHelper::isInductionTermFunctor(st.term()->functor()) &&
-        (InductionHelper::isStructInductionFunctor(st.term()->functor()) ||
-         InductionHelper::isIntInductionTermListInLiteral(st, lit))) {
-          found = true;
-          break;
+    if (env.options->inductionRemodulationRedundancyCheck()) {
+      NonVariableIterator stit(lhs.term());
+      bool found = false;
+      while (stit.hasNext()) {
+        auto st = stit.next();
+        if (InductionHelper::isInductionTermFunctor(st.term()->functor()) &&
+          (InductionHelper::isStructInductionFunctor(st.term()->functor()) ||
+          InductionHelper::isIntInductionTermListInLiteral(st, lit))) {
+            found = true;
+            break;
+        }
       }
-    }
-    if (!found) {
-      continue;
+      if (!found) {
+        continue;
+      }
     }
     if (adding) {
       _is->insert(rhs, lit, c);
@@ -247,10 +247,7 @@ void RewritingLHSIndex::handleClause(Clause* c, bool adding)
 {
   CALL("RewritingLHSIndex::handleClause");
 
-  if (c->length()!=1 &&
-    (env.options->inductionConsequenceGeneration() != Options::InductionConsequenceGeneration::ON ||
-     (!isFormulaTransformation(c->inference().rule()) || c->inference().rule() != InferenceRule::FUNCTION_DEFINITION)))
-  {
+  if (!canUseForRewrite(c)) {
     return;
   }
 
@@ -271,7 +268,6 @@ void RewritingLHSIndex::handleClause(Clause* c, bool adding)
       if (!allVars) {
         continue;
       }
-      // cout << *c << " " << lhs << endl;
       if (adding) {
         _is->insert(lhs, lit, c);
       }

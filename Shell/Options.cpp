@@ -1291,6 +1291,12 @@ void Options::init()
             _inductionConsequenceGeneration.reliesOn(_induction.is(notEqual(Induction::NONE)));
             _lookup.insert(&_inductionConsequenceGeneration);
 
+            _inductionRemodulationRedundancyCheck = BoolOptionValue("induction_remodulation_redundancy_check","indrrc",true);
+            _inductionRemodulationRedundancyCheck.description = "Try to do only non-redundant inductions";
+            _inductionRemodulationRedundancyCheck.tag(OptionTag::INFERENCES);
+            _inductionRemodulationRedundancyCheck.reliesOn(_inductionConsequenceGeneration.is(notEqual(InductionConsequenceGeneration::OFF)));
+            _lookup.insert(&_inductionRemodulationRedundancyCheck);
+
 	    _instantiation = ChoiceOptionValue<Instantiation>("instantiation","inst",Instantiation::OFF,{"off","on"});
 	    _instantiation.description = "Heuristically instantiate variables. Often wastes a lot of effort. Consider using thi instead.";
 	    _instantiation.tag(OptionTag::INFERENCES);

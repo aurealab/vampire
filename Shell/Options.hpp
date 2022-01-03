@@ -2203,6 +2203,7 @@ public:
   IntegerInductionInterval integerInductionInterval() const { return _integerInductionInterval.actualValue; }
   bool inductionBinaryResolveGenerated() const { return _inductionBinaryResolveGenerated.actualValue; }
   InductionConsequenceGeneration inductionConsequenceGeneration() const { return _inductionConsequenceGeneration.actualValue; }
+  bool inductionRemodulationRedundancyCheck() const { return _inductionRemodulationRedundancyCheck.actualValue; }
 
   float instGenBigRestartRatio() const { return _instGenBigRestartRatio.actualValue; }
   bool instGenPassiveReactivation() const { return _instGenPassiveReactivation.actualValue; }
@@ -2510,6 +2511,7 @@ private:
   ChoiceOptionValue<IntegerInductionInterval> _integerInductionInterval;
   BoolOptionValue _inductionBinaryResolveGenerated;
   ChoiceOptionValue<InductionConsequenceGeneration> _inductionConsequenceGeneration;
+  BoolOptionValue _inductionRemodulationRedundancyCheck;
 
   StringOptionValue _latexOutput;
   BoolOptionValue _latexUseDefaultSymbols;

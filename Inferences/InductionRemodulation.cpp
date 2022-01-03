@@ -175,19 +175,21 @@ struct ReverseLHSIteratorFn {
     if (!termHasAllVarsOfClause(rhs, _cl)) {
       return VirtualIterator<pair<Literal*, TermList>>::getEmpty();
     }
-    NonVariableIterator stit(arg.second.term());
-    bool found = false;
-    while (stit.hasNext()) {
-      auto st = stit.next();
-      if (InductionHelper::isInductionTermFunctor(st.term()->functor()) &&
-        (InductionHelper::isStructInductionFunctor(st.term()->functor()) ||
-         InductionHelper::isIntInductionTermListInLiteral(st, arg.first))) {
-          found = true;
-          break;
+    if (env.options->inductionRemodulationRedundancyCheck()) {
+      NonVariableIterator stit(arg.second.term());
+      bool found = false;
+      while (stit.hasNext()) {
+        auto st = stit.next();
+        if (InductionHelper::isInductionTermFunctor(st.term()->functor()) &&
+          (InductionHelper::isStructInductionFunctor(st.term()->functor()) ||
+           InductionHelper::isIntInductionTermListInLiteral(st, arg.first))) {
+            found = true;
+            break;
+        }
       }
-    }
-    if (!found) {
-      return VirtualIterator<pair<Literal*, TermList>>::getEmpty();
+      if (!found) {
+        return VirtualIterator<pair<Literal*, TermList>>::getEmpty();
+      }
     }
     return pvi(getSingletonIterator(make_pair(arg.first,rhs)));
   }
@@ -211,9 +213,7 @@ ClauseIterator InductionRemodulation::generateClauses(Clause* premise)
 
   // backward result
   ClauseIterator res2 = ClauseIterator::getEmpty();
-  if (premise->length() == 1 ||
-      (env.options->inductionConsequenceGeneration() == Options::InductionConsequenceGeneration::ON &&
-       (isFormulaTransformation(premise->inference().rule()) || premise->inference().rule() == InferenceRule::FUNCTION_DEFINITION)))
+  if (canUseForRewrite(premise))
   {
     auto itb1 = premise->getLiteralIterator();
     auto itb2 = getMapAndFlattenIterator(itb1,EqHelper::LHSIteratorFn(_salg->getOrdering()));
@@ -323,31 +323,34 @@ ClauseIterator InductionRemodulation::perform(
       continue;
     }
 
-    auto rinfos = RemodulationInfo::update(newCl, tgtLit,
-      static_cast<DHSet<RemodulationInfo>*>(rwClause->getRemodulationInfo()), _salg->getOrdering());
+    static const bool checkRedundancy = env.options->inductionRemodulationRedundancyCheck();
+    if (checkRedundancy) {
+      auto rinfos = RemodulationInfo::update(newCl, tgtLit,
+        static_cast<DHSet<RemodulationInfo>*>(rwClause->getRemodulationInfo()), _salg->getOrdering());
 
-    // The following case has to be checked to decide that
-    // this rewrite makes the new clauses redundant or not
-    //
-    // since we only rewrite one occurrence of rwTerm, the case
-    // we are looking for is when one side is tgtTermS and the
-    // other is unchanged
-    if (!shouldCheckRedundancy ||
-      (tgtTermS!=*tgtLit->nthArgument(0) && tgtTermS!=*tgtLit->nthArgument(1)))
-    {
-      RemodulationInfo rinfo;
-      rinfo._eq = eqLit;
-      rinfo._eqGr = eqLitS;
-      rinfo._rest = rest;
-      rinfos->insert(rinfo);
-    }
-    // TODO: if -av=off, we should check also that the rest of rwClause is greater than the eqClause
-    // TODO: check in non-generalized case that
+      // The following case has to be checked to decide that
+      // this rewrite makes the new clauses redundant or not
+      //
+      // since we only rewrite one occurrence of rwTerm, the case
+      // we are looking for is when one side is tgtTermS and the
+      // other is unchanged
+      if (!shouldCheckRedundancy ||
+        (tgtTermS!=*tgtLit->nthArgument(0) && tgtTermS!=*tgtLit->nthArgument(1)))
+      {
+        RemodulationInfo rinfo;
+        rinfo._eq = eqLit;
+        rinfo._eqGr = eqLitS;
+        rinfo._rest = rest;
+        rinfos->insert(rinfo);
+      }
+      // TODO: if -av=off, we should check also that the rest of rwClause is greater than the eqClause
+      // TODO: check in non-generalized case that
 
-    if (rinfos->isEmpty()) {
-      delete rinfos;
-    } else {
-      newCl->setRemodulationInfo(rinfos);
+      if (rinfos->isEmpty()) {
+        delete rinfos;
+      } else {
+        newCl->setRemodulationInfo(rinfos);
+      }
     }
     newCl->setInductionLemma(true);
     res = pvi(getConcatenatedIterator(res, getSingletonIterator(newCl)));

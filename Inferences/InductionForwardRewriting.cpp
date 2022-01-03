@@ -152,9 +152,8 @@ ClauseIterator InductionForwardRewriting::generateClauses(Clause *premise)
 
     //Perform forward rewriting
     res = pvi(getMappingIterator(itf3, ForwardResultFn(premise, _salg->getOrdering())));
-  } else if (premise->length() == 1 ||
-    (env.options->inductionConsequenceGeneration() == Options::InductionConsequenceGeneration::ON &&
-    (isFormulaTransformation(premise->inference().rule()) || premise->inference().rule() == InferenceRule::FUNCTION_DEFINITION)))
+  }
+  else if (canUseForRewrite(premise))
   {
     auto itb1 = premise->iterLits();
     auto itb2 = getMapAndFlattenIterator(itb1, RewritingLHSFn(_salg->getOrdering()));
