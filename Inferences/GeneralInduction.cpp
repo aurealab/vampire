@@ -170,7 +170,7 @@ void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Li
           auto mainLitGen = tr.transformLit();
           ASS_NEQ(mainLitGen, main.literal); // main literal should be inducted on
           if (RemodulationInfo::isRedundant(mainLitGen,
-                static_cast<DHSet<RemodulationInfo>*>(main.clause->getRemodulationInfo()),
+                main.clause->getRemodulationInfo<DHSet<RemodulationInfo>>(),
                 _salg->getOrdering())) {
             continue;
           }
@@ -181,7 +181,7 @@ void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Li
             auto sideLitGen = tr.transformLit();
             if (sideLitGen != kv2.first) { // side literals may be discarded if they contain no induction term occurrence
               if (RemodulationInfo::isRedundant(sideLitGen,
-                    static_cast<DHSet<RemodulationInfo>*>(kv2.second->getRemodulationInfo()),
+                    kv2.second->getRemodulationInfo<DHSet<RemodulationInfo>>(),
                     _salg->getOrdering())) {
                 redundant = true;
                 break;

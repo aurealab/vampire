@@ -199,47 +199,41 @@ void RemodulationLHSIndex::handleClause(Clause* c, bool adding)
   }
 
   for (unsigned i = 0; i < c->length(); i++) {
-  Literal* lit=(*c)[i];
-  TermIterator lhsi=EqHelper::getLHSIterator(lit, _ord);
-  while (lhsi.hasNext()) {
-    auto lhs = lhsi.next();
-    auto rhs = EqHelper::getOtherEqualitySide(lit, lhs);
-    // check if rhs contains all vars of clause
-    auto vit = c->getVariableIterator();
-    bool allVars = true;
-    while (vit.hasNext()) {
-      auto v = vit.next();
-      if (!rhs.containsSubterm(TermList(v, false))) {
-        allVars = false;
-        break;
-      }
-    }
-    if (!allVars) {
+    Literal* lit=(*c)[i];
+    if (!litHasAllVarsOfClause(lit, c)) {
       continue;
     }
-    if (env.options->inductionRemodulationRedundancyCheck()) {
-      NonVariableIterator stit(lhs.term());
-      bool found = false;
-      while (stit.hasNext()) {
-        auto st = stit.next();
-        if (InductionHelper::isInductionTermFunctor(st.term()->functor()) &&
-          (InductionHelper::isStructInductionFunctor(st.term()->functor()) ||
-          InductionHelper::isIntInductionTermListInLiteral(st, lit))) {
-            found = true;
-            break;
-        }
-      }
-      if (!found) {
+    TermIterator lhsi=EqHelper::getLHSIterator(lit, _ord);
+    while (lhsi.hasNext()) {
+      auto lhs = lhsi.next();
+      auto rhs = EqHelper::getOtherEqualitySide(lit, lhs);
+      // check if rhs contains all vars of clause
+      if (!termHasAllVarsOfClause(rhs, c)) {
         continue;
       }
+      if (env.options->inductionRemodulationRedundancyCheck()) {
+        NonVariableIterator stit(lhs.term());
+        bool found = false;
+        while (stit.hasNext()) {
+          auto st = stit.next();
+          if (InductionHelper::isInductionTermFunctor(st.term()->functor()) &&
+            (InductionHelper::isStructInductionFunctor(st.term()->functor()) ||
+            InductionHelper::isIntInductionTermListInLiteral(st, lit))) {
+              found = true;
+              break;
+          }
+        }
+        if (!found) {
+          continue;
+        }
+      }
+      if (adding) {
+        _is->insert(rhs, lit, c);
+      }
+      else {
+        _is->remove(rhs, lit, c);
+      }
     }
-    if (adding) {
-      _is->insert(rhs, lit, c);
-    }
-    else {
-      _is->remove(rhs, lit, c);
-    }
-  }
   }
 }
 
@@ -253,19 +247,13 @@ void RewritingLHSIndex::handleClause(Clause* c, bool adding)
 
   for (unsigned i = 0; i < c->length(); i++) {
     Literal* lit=(*c)[i];
+    if (!litHasAllVarsOfClause(lit, c)) {
+      continue;
+    }
     TermIterator lhsi=EqHelper::getLHSIterator(lit, _ord);
     while (lhsi.hasNext()) {
       auto lhs = lhsi.next();
-      auto vit = c->getVariableIterator();
-      bool allVars = true;
-      while (vit.hasNext()) {
-        auto v = vit.next();
-        if (!lhs.containsSubterm(TermList(v, false))) {
-          allVars = false;
-          break;
-        }
-      }
-      if (!allVars) {
+      if (!termHasAllVarsOfClause(lhs, c)) {
         continue;
       }
       if (adding) {

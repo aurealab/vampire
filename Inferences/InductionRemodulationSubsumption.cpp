@@ -49,29 +49,16 @@ Clause* InductionRemodulationSubsumption::simplify(Clause* cl)
   }
 
   // ASS_EQ(cl->length(), 1);
-  auto rinfos = static_cast<DHSet<RemodulationInfo>*>(cl->getRemodulationInfo());
+  const auto rinfos = cl->getRemodulationInfo<DHSet<RemodulationInfo>>();
   Clause* res = cl;
   for (unsigned li = 0; li < cl->length(); li++) {
     SLQueryResultIterator it = _index->getGeneralizations( (*cl)[li], false, false);
-    while (it.hasNext()) {
-      res = nullptr; // for now since all clauses are unit, delete the original clause
-      Clause* premise = it.next().clause;
-      ASS(premise->isInductionLemma());
-      // cout << "subsumed: " << *cl << endl;
-      // cout << "by:       " << *premise << endl;
-      if (!rinfos || rinfos->isEmpty()) {
-        break; // exit if there is nothing to update the other clause with
-      }
-      auto rinfosP = static_cast<DHSet<RemodulationInfo>*>(premise->getRemodulationInfo());
-      if (!rinfosP) {
-        rinfosP = new DHSet<RemodulationInfo>();
-        premise->setRemodulationInfo(rinfosP);
-      }
-      DHSet<RemodulationInfo>::Iterator rit(*rinfos);
-      while (rit.hasNext()) {
-        auto rinfo = rit.next();
-        rinfosP->insert(rinfo);
-      }
+    if (it.hasNext()) {
+      // Since we cannot retract induction formulas,
+      // just get rid of the current clause and don't
+      // induct on it.
+      res = nullptr;
+      break;
     }
   }
 

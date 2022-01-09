@@ -1286,7 +1286,7 @@ Clause* Splitter::buildAndInsertComponentClause(SplitLevel name, unsigned size, 
         }
       }
     }
-    auto rinfos = static_cast<DHSet<RemodulationInfo>*>(orig->getRemodulationInfo());
+    const auto rinfos = orig->getRemodulationInfo<DHSet<RemodulationInfo>>();
     if (rinfos && !rinfos->isEmpty()) {
       DHSet<RemodulationInfo>::Iterator it(*rinfos);
       auto rinfosNew = new DHSet<RemodulationInfo>();
@@ -1303,6 +1303,7 @@ Clause* Splitter::buildAndInsertComponentClause(SplitLevel name, unsigned size, 
         delete rinfosNew;
       } else {
         compCl->setRemodulationInfo(rinfosNew);
+        compCl->setInductionLemma(true);
       }
     }
   } else {

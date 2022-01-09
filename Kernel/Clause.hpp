@@ -198,7 +198,8 @@ public:
   bool isComponent() const { return _component; }
   void setComponent(bool c) { _component = c; }
 
-  void* getRemodulationInfo() const { return _remodulationInfo; }
+  template<typename T>
+  const T* getRemodulationInfo() const { return static_cast<const T*>(_remodulationInfo); }
   void setRemodulationInfo(void* r) { _remodulationInfo = r; }
 
   bool isInductionLemma() const { return _inductionLemma; }

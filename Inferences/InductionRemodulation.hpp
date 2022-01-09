@@ -38,6 +38,17 @@ using namespace Kernel;
 using namespace Indexing;
 using namespace Saturation;
 
+inline bool litHasAllVarsOfClause(Literal* lit, Clause* cl) {
+  auto vit = cl->getVariableIterator();
+  while (vit.hasNext()) {
+    auto v = vit.next();
+    if (!lit->containsSubterm(TermList(v, false))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 inline bool termHasAllVarsOfClause(TermList t, Clause* cl) {
   auto vit = cl->getVariableIterator();
   while (vit.hasNext()) {
@@ -155,7 +166,7 @@ struct RemodulationInfo {
     return !operator==(other);
   }
 
-  static DHSet<RemodulationInfo>* update(Clause* cl, Literal* lit, DHSet<RemodulationInfo>* rinfos, Ordering& ord) {
+  static DHSet<RemodulationInfo>* update(Clause* cl, Literal* lit, const DHSet<RemodulationInfo>* rinfos, Ordering& ord) {
     auto res = new DHSet<RemodulationInfo>();
     if (rinfos) {
       DHSet<RemodulationInfo>::Iterator it(*rinfos);
@@ -183,7 +194,7 @@ struct RemodulationInfo {
     return lhs;
   }
 
-  static bool isRedundant(Literal* l, DHSet<RemodulationInfo>* rinfos, Ordering& ord) {
+  static bool isRedundant(Literal* l, const DHSet<RemodulationInfo>* rinfos, Ordering& ord) {
     if (!rinfos) {
       return false;
     }

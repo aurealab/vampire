@@ -233,7 +233,7 @@ Clause *InductionForwardRewriting::perform(
     }
   }
 
-  auto rinfos = static_cast<DHSet<RemodulationInfo>*>(rwClause->getRemodulationInfo());
+  const auto rinfos = rwClause->getRemodulationInfo<DHSet<RemodulationInfo>>();
   // TODO not sure this block helps a lot, find out
   if (rinfos) {
     DHSet<RemodulationInfo>::Iterator rit(*rinfos);
@@ -258,8 +258,7 @@ Clause *InductionForwardRewriting::perform(
     }
   }
 
-  auto rinfosU = RemodulationInfo::update(res, tgtLitS,
-    static_cast<DHSet<RemodulationInfo>*>(rwClause->getRemodulationInfo()), ord);
+  auto rinfosU = RemodulationInfo::update(res, tgtLitS, rinfos, ord);
 
   if (rinfosU->isEmpty()) {
     delete rinfosU;

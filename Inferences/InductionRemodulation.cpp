@@ -172,7 +172,8 @@ struct ReverseLHSIteratorFn {
   {
     CALL("ReverseLHSIteratorFn()");
     auto rhs = EqHelper::getOtherEqualitySide(arg.first, arg.second);
-    if (!termHasAllVarsOfClause(rhs, _cl)) {
+    if (!litHasAllVarsOfClause(arg.first, _cl) ||
+        !termHasAllVarsOfClause(rhs, _cl)) {
       return VirtualIterator<pair<Literal*, TermList>>::getEmpty();
     }
     if (env.options->inductionRemodulationRedundancyCheck()) {
@@ -326,7 +327,7 @@ ClauseIterator InductionRemodulation::perform(
     static const bool checkRedundancy = env.options->inductionRemodulationRedundancyCheck();
     if (checkRedundancy) {
       auto rinfos = RemodulationInfo::update(newCl, tgtLit,
-        static_cast<DHSet<RemodulationInfo>*>(rwClause->getRemodulationInfo()), _salg->getOrdering());
+        rwClause->getRemodulationInfo<DHSet<RemodulationInfo>>(), _salg->getOrdering());
 
       // The following case has to be checked to decide that
       // this rewrite makes the new clauses redundant or not
