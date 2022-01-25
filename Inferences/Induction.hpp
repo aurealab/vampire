@@ -51,8 +51,8 @@ private:
 
 class LiteralSubsetReplacement : TermTransformer {
 public:
-  LiteralSubsetReplacement(Literal* lit, Term* o, TermList r)
-      : _lit(lit), _o(o), _r(r) {
+  LiteralSubsetReplacement(Literal* lit, Term* o, TermList r, unsigned a, bool generalize)
+      : _lit(lit), _o(o), _r(r), _a(a), _gen(generalize) {
     _occurrences = _lit->countSubtermOccurrences(TermList(_o));
     _maxIterations = pow(2, _occurrences);
   }
@@ -65,7 +65,7 @@ public:
   List<pair<Literal*, InferenceRule>>* getListOfTransformedLiterals(InferenceRule rule);
 
 protected:
-  virtual TermList transformSubterm(TermList trm);
+  TermList transformSubterm(TermList trm) override;
 
 private:
   // _iteration serves as a map of occurrences to replace
@@ -78,6 +78,8 @@ private:
   Literal* _lit;
   Term* _o;
   TermList _r;
+  unsigned _a;
+  bool _gen;
 };
 
 class Induction
@@ -95,17 +97,20 @@ public:
   ClauseIterator generateClauses(Clause* premise);
 
 private:
+  void parseActiveOccurrences(Clause* premise);
+
   // The following pointers can be null if int induction is off.
   LiteralIndex* _comparisonIndex = nullptr;
   TermIndex* _inductionTermIndex = nullptr;
+  DHMap<unsigned, unsigned> _activeOccurrenceMap;
 };
 
 class InductionClauseIterator
 {
 public:
   // all the work happens in the constructor!
-  InductionClauseIterator(Clause* premise, InductionHelper helper)
-      : _helper(helper)
+  InductionClauseIterator(Clause* premise, InductionHelper helper, DHMap<unsigned,unsigned>& activeOccurrences)
+      : _helper(helper), _activeOccurrences(activeOccurrences)
   {
     processClause(premise);
   }
@@ -163,6 +168,7 @@ private:
 
   Stack<Clause*> _clauses;
   InductionHelper _helper;
+  DHMap<unsigned,unsigned>& _activeOccurrences;
 };
 
 };

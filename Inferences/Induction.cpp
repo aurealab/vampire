@@ -214,7 +214,7 @@ TermList LiteralSubsetReplacement::transformSubterm(TermList trm)
   if(trm.isTerm() && trm.term() == _o){
     // Replace either if there are too many occurrences to try all possibilities,
     // or if the bit in _iteration corresponding to this match is set to 1.
-    if ((_occurrences > _maxOccurrences) || (1 & (_iteration >> _matchCount++))) {
+    if ((_occurrences > _maxOccurrences) || (1 & (_iteration >> (_occurrences - (_matchCount++) - 1)))) {
       return _r;
     }
   }
@@ -223,8 +223,23 @@ TermList LiteralSubsetReplacement::transformSubterm(TermList trm)
 
 Literal* LiteralSubsetReplacement::transformSubset(InferenceRule& rule) {
   CALL("LiteralSubsetReplacement::transformSubset");
-  // Increment _iteration, since it either is 0, or was already used.
-  _iteration++;
+  if (_gen) {
+    // Increment _iteration, since it either is 0, or was already used.
+    do {
+      _iteration++;
+    } while (_iteration < _maxIterations && (_a & (_a ^ _iteration)));
+  } else {
+    if (!_iteration) {
+      ASS_L(_a, _maxIterations);
+      _iteration = _a ? _a : _maxIterations-1;
+    } else if (_iteration == _maxIterations-1) {
+      _iteration++;
+    } else if (_iteration == _a) {
+      _iteration = _maxIterations-1;
+    } else {
+      ASSERTION_VIOLATION;
+    }
+  }
   static unsigned maxSubsetSize = env.options->maxInductionGenSubsetSize();
   // Note: __builtin_popcount() is a GCC built-in function.
   unsigned setBits = __builtin_popcount(_iteration);
@@ -289,7 +304,76 @@ ClauseIterator Induction::generateClauses(Clause* premise)
 {
   CALL("Induction::generateClauses");
 
-  return pvi(InductionClauseIterator(premise, InductionHelper(_comparisonIndex, _inductionTermIndex, _salg->getSplitter())));
+  parseActiveOccurrences(premise);
+  return pvi(InductionClauseIterator(premise, InductionHelper(_comparisonIndex, _inductionTermIndex, _salg->getSplitter()), _activeOccurrenceMap));
+}
+
+inline bool isTermAlgebraTerm(Term* t) {
+  unsigned f = t->functor();
+  if (!env.signature->getFunction(f)->termAlgebraCons() &&
+      !env.signature->getFunction(f)->termAlgebraDest()) {
+    return false;
+  }
+  for (unsigned i = 0; i < t->arity(); i++) {
+    auto ti = *t->nthArgument(i);
+    if (ti.isTerm() && !isTermAlgebraTerm(ti.term())) {
+      return false;
+    }
+  }
+  return true;
+}
+
+inline bool isHeader(Term* t) {
+  for (unsigned i = 0; i < t->arity(); i++) {
+    auto ti = *t->nthArgument(i);
+    if (ti.isTerm() && !isTermAlgebraTerm(ti.term())) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void Induction::parseActiveOccurrences(Clause* premise)
+{
+  for (unsigned i = 0; i < premise->length(); i++) {
+    auto lit = (*premise)[i];
+    if (!lit->isPositive() || !lit->isEquality()) {
+      continue;
+    }
+    if (!lit->nthArgument(0)->isTerm() || !lit->nthArgument(1)->isTerm()) {
+      continue;
+    }
+    for (unsigned j = 0; j <= 1; j++) {
+      auto lhs = lit->nthArgument(j)->term();
+      auto rhs = lit->nthArgument(1-j)->term();
+      if (!isHeader(lhs)) {
+        continue;
+      }
+      auto f = lhs->functor();
+      NonVariableIterator it(rhs);
+      while(it.hasNext()){
+        auto t = it.next().term();
+        if (t->functor() != f || !isHeader(t)) {
+          continue;
+        }
+        unsigned occ = 0;
+        for (unsigned k = 0; k < t->arity(); k++) {
+          occ <<= 1;
+          if (!Term::getVariableIterator(*lhs->nthArgument(k)).hasNext()) {
+            continue;
+          }
+          auto st = *lhs->nthArgument(k) != *t->nthArgument(k) && lhs->nthArgument(k)->containsSubterm(*t->nthArgument(k));
+          occ = occ | (1 & st);
+        }
+        unsigned v = _activeOccurrenceMap.get(f, 0);
+        auto temp = v;
+        v = v | occ;
+        if (v != temp) {
+          _activeOccurrenceMap.insert(f, v);
+        }
+      }
+    }
+  }
 }
 
 void InductionClauseIterator::processClause(Clause* premise)
@@ -321,17 +405,32 @@ void InductionClauseIterator::processLiteral(Clause* premise, Literal* lit)
   static bool generalize = env.options->inductionGen();
 
   if(InductionHelper::isInductionLiteral(lit)){
-      Set<Term*> ta_terms;
+      DHMap<Term*, unsigned> ta_terms;
       Set<Term*> int_terms;
+      Stack<bool> actives;
       //TODO this should be a non-variable non-type iterator it seems
       SubtermIterator it(lit);
+      for (unsigned i = 0; i < lit->arity(); i++) {
+        actives.push(true);
+      }
       while(it.hasNext()){
         TermList ts = it.next();
+        bool active = actives.pop();
         if(!ts.term()){ continue; }
-        unsigned f = ts.term()->functor(); 
+        auto t = ts.term();
+        unsigned f = t->functor();
+        unsigned occ = ~0;
+        _activeOccurrences.find(f, occ);
+        for (unsigned i = 0; i < t->arity(); i++) {
+          actives.push(active && (occ & (1 << i)));
+        }
         if(InductionHelper::isInductionTermFunctor(f)){
           if(InductionHelper::isStructInductionOn() && InductionHelper::isStructInductionFunctor(f)){
-            ta_terms.insert(ts.term());
+            if (!ta_terms.find(t)) {
+              ta_terms.insert(t, active);
+            } else {
+              ta_terms.get(t) = (ta_terms.get(t) << 1) | (active & 1);
+            }
           }
           if(InductionHelper::isIntInductionOneOn() && InductionHelper::isIntInductionTermListInLiteral(ts, lit)){
             int_terms.insert(ts.term());
@@ -354,9 +453,11 @@ void InductionClauseIterator::processLiteral(Clause* premise, Literal* lit)
         performIntInductionForEligibleBounds(premise, lit, t, indLits, indTerm, /*increasing=*/false, grBound, leBound);
         List<pair<Literal*, InferenceRule>>::destroy(indLits);
       }
-      Set<Term*>::Iterator citer2(ta_terms);
+      DHMap<Term*,unsigned>::Iterator citer2(ta_terms);
       while(citer2.hasNext()){
-        Term* t = citer2.next();
+        Term* t;
+        unsigned o;
+        citer2.next(t,o);
         static bool one = env.options->structInduction() == Options::StructuralInductionKind::ONE ||
                           env.options->structInduction() == Options::StructuralInductionKind::ALL; 
         static bool two = env.options->structInduction() == Options::StructuralInductionKind::TWO ||
@@ -365,9 +466,9 @@ void InductionClauseIterator::processLiteral(Clause* premise, Literal* lit)
                           env.options->structInduction() == Options::StructuralInductionKind::ALL;
         if(notDone(lit,t)){
           InferenceRule rule = InferenceRule::INDUCTION_AXIOM;
-          Term* inductionTerm = generalize ? getPlaceholderForTerm(t) : t;
-          Kernel::LiteralSubsetReplacement subsetReplacement(lit, t, TermList(inductionTerm));
-          Literal* ilit = generalize ? subsetReplacement.transformSubset(rule) : lit;
+          Term* inductionTerm = getPlaceholderForTerm(t);
+          Kernel::LiteralSubsetReplacement subsetReplacement(lit, t, TermList(inductionTerm), o, generalize);
+          Literal* ilit = subsetReplacement.transformSubset(rule);
           ASS(ilit != nullptr);
           do {
             if(one){
@@ -379,7 +480,7 @@ void InductionClauseIterator::processLiteral(Clause* premise, Literal* lit)
             if(three){
               performStructInductionThree(premise,lit,ilit,inductionTerm,rule);
             }
-          } while (generalize && (ilit = subsetReplacement.transformSubset(rule)));
+          } while ((ilit = subsetReplacement.transformSubset(rule)));
         }
       } 
    }
@@ -425,12 +526,8 @@ void InductionClauseIterator::generalizeAndPerformIntInduction(Clause* premise, 
             ? (increasing ? InferenceRule::INT_DB_UP_INDUCTION_AXIOM : InferenceRule::INT_DB_DOWN_INDUCTION_AXIOM)
             : (increasing ? (finite ? InferenceRule::INT_FIN_UP_INDUCTION_AXIOM : InferenceRule::INT_INF_UP_INDUCTION_AXIOM)
                           : (finite ? InferenceRule::INT_FIN_DOWN_INDUCTION_AXIOM : InferenceRule::INT_INF_DOWN_INDUCTION_AXIOM));
-    if (generalize) {
-      Kernel::LiteralSubsetReplacement subsetReplacement(origLit, origTerm, TermList(indTerm));
-      indLits = subsetReplacement.getListOfTransformedLiterals(rule);
-    } else {
-      indLits = new List<pair<Literal*, InferenceRule>>(make_pair(origLit, rule));
-    }
+    Kernel::LiteralSubsetReplacement subsetReplacement(origLit, origTerm, TermList(indTerm), 0, generalize);
+    indLits = subsetReplacement.getListOfTransformedLiterals(rule);
   }
   List<pair<Literal*, InferenceRule>>::RefIterator it(indLits);
   while (it.hasNext()) {
