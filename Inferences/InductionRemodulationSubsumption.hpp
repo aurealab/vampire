@@ -15,16 +15,11 @@
 #ifndef __InductionRemodulationSubsumption__
 #define __InductionRemodulationSubsumption__
 
-
 #include "Forwards.hpp"
 #include "InferenceEngine.hpp"
 #include "Indexing/LiteralIndex.hpp"
 
 namespace Inferences {
-
-using namespace Kernel;
-using namespace Indexing;
-using namespace Saturation;
 
 class InductionRemodulationSubsumption
 : public ImmediateSimplificationEngine
@@ -33,8 +28,6 @@ public:
   CLASS_NAME(InductionRemodulationSubsumption);
   USE_ALLOCATOR(InductionRemodulationSubsumption);
 
-  InductionRemodulationSubsumption() = default;
-
   void attach(SaturationAlgorithm* salg) override;
   void detach() override;
   Clause* simplify(Clause* cl) override;
@@ -42,7 +35,6 @@ public:
 private:
   InductionRemodulationLiteralIndex* _index;
 };
-
 
 };
 

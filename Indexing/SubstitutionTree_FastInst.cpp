@@ -249,7 +249,7 @@ public:
     return SubstHelper::apply(t, *this);
   }
 
-  Literal* applyToBoundQuery(Literal* lit)
+  Literal* applyToBoundQuery(Literal* lit) override
   {
     CALL("SubstitutionTree::InstMatcher::Substitution::applyToBoundQuery(Literal*)");
 

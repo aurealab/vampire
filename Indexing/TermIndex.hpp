@@ -156,23 +156,6 @@ private:
   const Options& _opt;
 };
 
-/**
- * Term index for induction
- */
-class InductionTermIndex
-: public TermIndex
-{
-public:
-  CLASS_NAME(InductionTermIndex);
-  USE_ALLOCATOR(InductionTermIndex);
-
-  InductionTermIndex(TermIndexingStructure* is)
-  : TermIndex(is) {}
-
-protected:
-  void handleClause(Clause* c, bool adding);
-};
-
 class RemodulationSubtermIndex
 : public TermIndex
 {
@@ -203,6 +186,23 @@ protected:
   void handleClause(Clause* c, bool adding);
 private:
   Ordering& _ord;
+};
+
+/**
+ * Term index for induction
+ */
+class InductionTermIndex
+: public TermIndex
+{
+public:
+  CLASS_NAME(InductionTermIndex);
+  USE_ALLOCATOR(InductionTermIndex);
+
+  InductionTermIndex(TermIndexingStructure* is)
+  : TermIndex(is) {}
+
+protected:
+  void handleClause(Clause* c, bool adding);
 };
 
 /**

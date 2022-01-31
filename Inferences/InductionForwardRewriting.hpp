@@ -22,10 +22,6 @@
 
 namespace Inferences {
 
-using namespace Kernel;
-using namespace Shell;
-using namespace Indexing;
-
 class InductionForwardRewriting
   : public GeneratingInferenceEngine
   {
@@ -56,11 +52,6 @@ private:
       Clause *rwClause, Literal *rwLiteral, TermList rwTerm,
       Clause *eqClause, Literal *eqLiteral, TermList eqLHS,
       ResultSubstitutionSP subst, bool eqIsResult, Ordering& ord);
-
-  struct ForwardResultFn;
-  struct BackwardResultFn;
-  struct RewriteableSubtermsFn;
-  struct GeneralizationsFn;
 
   RewritingLHSIndex* _index;
   RemodulationSubtermIndex* _tindex;

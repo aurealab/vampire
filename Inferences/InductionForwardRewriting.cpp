@@ -26,113 +26,10 @@
 #include "Indexing/IndexManager.hpp"
 
 #include "Shell/Options.hpp"
-#include "Shell/InductionPreprocessor.hpp"
 
 #include "InductionForwardRewriting.hpp"
 #include "InductionHelper.hpp"
 #include "InductionRemodulation.hpp"
-
-#if VDEBUG
-#include <iostream>
-using namespace std;
-#endif
-
-using namespace Inferences;
-using namespace Lib;
-using namespace Kernel;
-using namespace Saturation;
-
-struct InductionForwardRewriting::GeneralizationsFn {
-  GeneralizationsFn(RewritingLHSIndex *index) : _index(index) {}
-  VirtualIterator<pair<pair<Literal *, TermList>, TermQueryResult>> operator()(pair<Literal *, TermList> arg)
-  {
-    CALL("InductionForwardRewriting::GeneralizationsFn()");
-    return pvi(pushPairIntoRightIterator(arg, _index->getGeneralizations(arg.second)));
-  }
-
-private:
-  RewritingLHSIndex* _index;
-};
-
-struct InductionForwardRewriting::RewriteableSubtermsFn {
-  VirtualIterator<pair<Literal *, TermList>> operator()(Literal *lit)
-  {
-    CALL("InductionForwardRewriting::RewriteableSubtermsFn()");
-    NonVariableIterator nvi(lit);
-    return pvi(pushPairIntoRightIterator(lit,
-                                         getUniquePersistentIteratorFromPtr(&nvi)));
-  }
-};
-
-struct InductionForwardRewriting::ForwardResultFn {
-  ForwardResultFn(Clause *cl, Ordering& ord) : _cl(cl), _ord(ord) {}
-
-  Clause* operator()(pair<pair<Literal *, TermList>, TermQueryResult> arg)
-  {
-    CALL("InductionForwardRewriting::ForwardResultFn()");
-
-    TermQueryResult &qr = arg.second;
-    return InductionForwardRewriting::perform(
-      _cl, arg.first.first, arg.first.second, qr.clause,
-      qr.literal, qr.term, qr.substitution, true, _ord);
-  }
-private:
-  Clause *_cl;
-  Ordering& _ord;
-};
-
-struct AllVarsFilterFn {
-  AllVarsFilterFn(Clause* cl) : _cl(cl) {}
-  bool operator()(pair<Literal*, TermList> arg) {
-    return termHasAllVarsOfClause(arg.second, _cl);
-  }
-private:
-  Clause* _cl;
-};
-
-struct RewritingLHSFn
-{
-  RewritingLHSFn(Ordering& ord) : _ord(ord) {};
-  VirtualIterator<pair<Literal*, TermList>> operator()(Literal* lit)
-  {
-    return pvi(pushPairIntoRightIterator(lit, EqHelper::getLHSIterator(lit, _ord)));
-  }
-private:
-  Ordering& _ord;
-};
-
-struct RewritableResultsFn
-{
-  RewritableResultsFn(RemodulationSubtermIndex* index) : _index(index) {}
-  VirtualIterator<pair<pair<Literal*, TermList>, TermQueryResult> > operator()(pair<Literal*, TermList> arg)
-  {
-    return pvi(pushPairIntoRightIterator(arg, _index->getInstances(arg.second, true)));
-  }
-private:
-  RemodulationSubtermIndex* _index;
-};
-
-struct InductionForwardRewriting::BackwardResultFn
-{
-  BackwardResultFn(Clause* cl, Ordering& ord) : _cl(cl), _ord(ord) {}
-  Clause* operator()(pair<pair<Literal*, TermList>, TermQueryResult> arg)
-  {
-    CALL("BackwardResultFn::operator()");
-
-    if(_cl==arg.second.clause) {
-      return 0;
-    }
-
-    TermQueryResult& qr = arg.second;
-    return InductionForwardRewriting::perform(
-      qr.clause, qr.literal, qr.term,
-	    _cl, arg.first.first, arg.first.second, qr.substitution, false, _ord);
-  }
-private:
-  Clause* _cl;
-  Ordering& _ord;
-};
-
 
 ClauseIterator InductionForwardRewriting::generateClauses(Clause *premise)
 {
@@ -144,27 +41,52 @@ ClauseIterator InductionForwardRewriting::generateClauses(Clause *premise)
 
     // Get an iterator of pairs of selected literals and rewritable subterms
     // of those literals. Here all subterms of a literal are rewritable.
-    auto itf2 = getMapAndFlattenIterator(itf1, RewriteableSubtermsFn());
+    auto itf2 = getMapAndFlattenIterator(itf1, [](Literal *lit) {
+      NonVariableIterator nvi(lit);
+      return pvi(pushPairIntoRightIterator(lit,
+        getUniquePersistentIteratorFromPtr(&nvi)));
+    });
 
     // Get clauses with a function definition literal whose lhs is a generalization of the rewritable subterm,
     // returns a pair with the original pair and the generalization result (includes substitution)
-    auto itf3 = getMapAndFlattenIterator(itf2, GeneralizationsFn(_index));
+    auto itf3 = getMapAndFlattenIterator(itf2, [this](pair<Literal *, TermList> arg) {
+      return pvi(pushPairIntoRightIterator(arg, _index->getGeneralizations(arg.second)));
+    });
 
     //Perform forward rewriting
-    res = pvi(getMappingIterator(itf3, ForwardResultFn(premise, _salg->getOrdering())));
+    res = pvi(getMappingIterator(itf3, [this, premise](pair<pair<Literal *, TermList>, TermQueryResult> arg) {
+      TermQueryResult &qr = arg.second;
+      return InductionForwardRewriting::perform(
+        premise, arg.first.first, arg.first.second, qr.clause,
+        qr.literal, qr.term, qr.substitution, true, _salg->getOrdering());
+    }));
   }
-  else if (canUseForRewrite(premise))
+  if (canUseForRewrite(premise))
   {
     auto itb1 = premise->iterLits();
-    auto itb2 = getMapAndFlattenIterator(itb1, RewritingLHSFn(_salg->getOrdering()));
-    auto itb3 = getFilteredIterator(itb2, AllVarsFilterFn(premise));
-    auto itb4 = getMapAndFlattenIterator(itb3, RewritableResultsFn(_tindex));
+    auto itb2 = getMapAndFlattenIterator(itb1, [this](Literal* lit) {
+      return pvi(pushPairIntoRightIterator(lit, EqHelper::getLHSIterator(lit, _salg->getOrdering())));
+    });
+    auto itb3 = getFilteredIterator(itb2, [premise](pair<Literal*, TermList> arg) {
+      return termHasAllVarsOfClause(arg.second, premise);
+    });
+    auto itb4 = getMapAndFlattenIterator(itb3, [this](pair<Literal*, TermList> arg) {
+      return pvi(pushPairIntoRightIterator(arg, _tindex->getInstances(arg.second, true)));
+    });
 
-    res = pvi(getMappingIterator(itb4, BackwardResultFn(premise, _salg->getOrdering())));
+    res = pvi(getMappingIterator(itb4, [this,premise](pair<pair<Literal*, TermList>, TermQueryResult> arg) -> Clause* {
+      if(premise == arg.second.clause) {
+        return nullptr;
+      }
+
+      TermQueryResult& qr = arg.second;
+      return InductionForwardRewriting::perform(
+        qr.clause, qr.literal, qr.term,
+        premise, arg.first.first, arg.first.second, qr.substitution, false, _salg->getOrdering());
+    }));
   }
   // Remove null elements
-  auto it2 = getFilteredIterator(res, NonzeroFn());
-  return getTimeCountedIterator(it2, TC_FNDEF_REWRITING);
+  return pvi(getFilteredIterator(res, NonzeroFn()));
 }
 
 Clause *InductionForwardRewriting::perform(
@@ -264,7 +186,7 @@ Clause *InductionForwardRewriting::perform(
     delete rinfosU;
   } else {
     res->setRemodulationInfo(rinfosU);
-    res->setInductionLemma(true);
+    res->markInductionLemma();
   }
   return res;
 }

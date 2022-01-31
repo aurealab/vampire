@@ -209,22 +209,6 @@ public:
   void attach(SaturationAlgorithm* salg) override;
   void detach() override;
 
-  virtual void setAllowed(vset<Term*> allowed) {
-    _allowed = allowed;
-  }
-
-  void pushAllowed(Term* t) {
-    _allowed.insert(t);
-  }
-
-  // void popAllowed() {
-  //   _allowed.pop_back();
-  // }
-
-  virtual void clearAllowed() {
-    _allowed.clear();
-  }
-
 #if VDEBUG
   void setTestIndices(Stack<Index*> const& indices) override {
     _index = (TermIndex*)indices[0];
@@ -262,7 +246,7 @@ private:
   InferenceRule _rule;
   DHMap<Literal*, vset<Literal*>> _done;
   TermIndex* _index;
-  vset<Term*> _allowed;
+  RemodulationManager* _remodulationManager;
 };
 
 }

@@ -307,6 +307,9 @@ SaturationAlgorithm::~SaturationAlgorithm()
   if (_symEl) {
     delete _symEl;
   }
+  if (_remodulationManager) {
+    delete _remodulationManager;
+  }
 
   _active->detach();
   _passive->detach();
@@ -1549,8 +1552,12 @@ SaturationAlgorithm* SaturationAlgorithm::createFromOptions(Problem& prb, const 
     if (consGen) {
       inductionRemodulation = new InductionRemodulation();
       gie->addFront(inductionRemodulation);
-      inductionRewriting = new InductionForwardRewriting();
-      gie->addFront(inductionRewriting);
+      // inductionRewriting = new InductionForwardRewriting();
+      // gie->addFront(inductionRewriting);
+      res->_remodulationManager = new RemodulationManager();
+      res->_remodulationManager->_ord = res->_ordering.ptr();
+      res->_active->addedEvent.subscribe(res->_remodulationManager, &RemodulationManager::onActiveAdded);
+      res->_active->removedEvent.subscribe(res->_remodulationManager, &RemodulationManager::onActiveRemoved);
     }
     gie->addFront(induction);
     // since indhrw relies on induction, we create this

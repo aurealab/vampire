@@ -1303,7 +1303,7 @@ Clause* Splitter::buildAndInsertComponentClause(SplitLevel name, unsigned size, 
         delete rinfosNew;
       } else {
         compCl->setRemodulationInfo(rinfosNew);
-        compCl->setInductionLemma(true);
+        compCl->markInductionLemma();
       }
     }
   } else {

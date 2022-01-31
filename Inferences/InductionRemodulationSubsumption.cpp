@@ -19,10 +19,6 @@
 
 namespace Inferences
 {
-using namespace Lib;
-using namespace Kernel;
-using namespace Indexing;
-using namespace Saturation;
 
 void InductionRemodulationSubsumption::attach(SaturationAlgorithm* salg)
 {
@@ -44,12 +40,10 @@ Clause* InductionRemodulationSubsumption::simplify(Clause* cl)
 {
   CALL("InductionRemodulationSubsumption::simplify");
 
-  if(!cl->isInductionLemma() || cl->length() != 1) {
+  if(!cl->isInductionLemma()) {
     return cl;
   }
 
-  // ASS_EQ(cl->length(), 1);
-  const auto rinfos = cl->getRemodulationInfo<DHSet<RemodulationInfo>>();
   Clause* res = cl;
   for (unsigned li = 0; li < cl->length(); li++) {
     SLQueryResultIterator it = _index->getGeneralizations( (*cl)[li], false, false);

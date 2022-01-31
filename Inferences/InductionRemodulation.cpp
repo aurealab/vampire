@@ -12,19 +12,14 @@
  * Implements class InductionRemodulation.
  */
 
-#include "Debug/RuntimeStatistics.hpp"
-
 #include "Lib/Metaiterators.hpp"
 
-#include "Kernel/EqHelper.hpp"
 #include "Kernel/SortHelper.hpp"
 #include "Kernel/TermIterators.hpp"
 
 #include "Saturation/SaturationAlgorithm.hpp"
 
 #include "Shell/Options.hpp"
-#include "Shell/Statistics.hpp"
-#include "Shell/UnificationWithAbstractionConfig.hpp"
 
 #include "InductionHelper.hpp"
 
@@ -34,13 +29,10 @@ namespace Inferences {
 
 using namespace Lib;
 using namespace Kernel;
-using namespace Indexing;
-using namespace Saturation;
 
-
-TermList LiteralSubsetReplacement2::transformSubterm(TermList trm)
+TermList SingleOccurrenceReplacement::transformSubterm(TermList trm)
 {
-  CALL("LiteralSubsetReplacement2::transformSubterm");
+  CALL("SingleOccurrenceReplacement::transformSubterm");
 
   if(trm.isTerm() && trm.term() == _o){
     if (_iteration == _matchCount++) {
@@ -50,8 +42,9 @@ TermList LiteralSubsetReplacement2::transformSubterm(TermList trm)
   return trm;
 }
 
-Literal* LiteralSubsetReplacement2::transformSubset() {
-  CALL("LiteralSubsetReplacement2::transformSubset");
+Literal* SingleOccurrenceReplacement::transformSubset()
+{
+  CALL("SingleOccurrenceReplacement::transformSubset");
   // Increment _iteration, since it either is 0, or was already used.
   _iteration++;
   if (_iteration > _occurrences) {
@@ -81,91 +74,6 @@ void InductionRemodulation::detach()
   GeneratingInferenceEngine::detach();
 }
 
-struct InductionLiteralsFn
-{
-  InductionLiteralsFn() = default;
-
-  bool operator()(Literal* lit)
-  {
-    CALL("InductionLiteralsFn()");
-    return InductionHelper::isInductionLiteral(lit);
-  }
-};
-
-struct RewriteableSubtermsFn
-{
-  VirtualIterator<pair<Literal*, TermList> > operator()(Literal* lit)
-  {
-    CALL("RewriteableSubtermsFn()");
-    NonVariableNonTypeIterator nvi(lit);
-    TermIterator it = getUniquePersistentIteratorFromPtr(&nvi);
-    return pvi( pushPairIntoRightIterator(lit, it) );
-  }
-};
-
-struct RewritableResultsFn
-{
-  RewritableResultsFn(RemodulationSubtermIndex* index) : _index(index) {}
-  VirtualIterator<pair<pair<Literal*, TermList>, TermQueryResult> > operator()(pair<Literal*, TermList> arg)
-  {
-    CALL("RewritableResultsFn()");
-    return pvi( pushPairIntoRightIterator(arg, _index->getInstances(arg.second, true)) );
-  }
-private:
-  RemodulationSubtermIndex* _index;
-};
-
-
-struct ApplicableRewritesFn
-{
-  ApplicableRewritesFn(RemodulationLHSIndex* index) : _index(index) {}
-  VirtualIterator<pair<pair<Literal*, TermList>, TermQueryResult> > operator()(pair<Literal*, TermList> arg)
-  {
-    CALL("ApplicableRewritesFn()");
-    return pvi( pushPairIntoRightIterator(arg, _index->getGeneralizations(arg.second, true)) );
-  }
-private:
-  RemodulationLHSIndex* _index;
-};
-
-struct ForwardResultFn
-{
-  ForwardResultFn(Clause* cl, InductionRemodulation& parent)
-    : _cl(cl), _parent(parent) {}
-
-  ClauseIterator operator()(pair<pair<Literal*, TermList>, TermQueryResult> arg)
-  {
-    CALL("ForwardResultFn::operator()");
-
-    TermQueryResult& qr = arg.second;
-    return _parent.perform(_cl, arg.first.first, arg.first.second,
-	    qr.clause, qr.literal, qr.term, qr.substitution, true, qr.constraints);
-  }
-private:
-  Clause* _cl;
-  InductionRemodulation& _parent;
-};
-
-struct BackwardResultFn
-{
-  BackwardResultFn(Clause* cl, InductionRemodulation& parent) : _cl(cl), _parent(parent) {}
-  ClauseIterator operator()(pair<pair<Literal*, TermList>, TermQueryResult> arg)
-  {
-    CALL("BackwardResultFn::operator()");
-
-    if(_cl==arg.second.clause) {
-      return ClauseIterator::getEmpty();
-    }
-
-    TermQueryResult& qr = arg.second;
-    return _parent.perform(qr.clause, qr.literal, qr.term,
-	    _cl, arg.first.first, arg.first.second, qr.substitution, false, qr.constraints);
-  }
-private:
-  Clause* _cl;
-  InductionRemodulation& _parent;
-};
-
 struct ReverseLHSIteratorFn {
   ReverseLHSIteratorFn(Clause* cl) : _cl(cl) {}
   VirtualIterator<pair<Literal*, TermList>> operator()(pair<Literal*, TermList> arg)
@@ -176,21 +84,8 @@ struct ReverseLHSIteratorFn {
         !termHasAllVarsOfClause(rhs, _cl)) {
       return VirtualIterator<pair<Literal*, TermList>>::getEmpty();
     }
-    if (env.options->inductionRemodulationRedundancyCheck()) {
-      NonVariableIterator stit(arg.second.term());
-      bool found = false;
-      while (stit.hasNext()) {
-        auto st = stit.next();
-        if (InductionHelper::isInductionTermFunctor(st.term()->functor()) &&
-          (InductionHelper::isStructInductionFunctor(st.term()->functor()) ||
-           InductionHelper::isIntInductionTermListInLiteral(st, arg.first))) {
-            found = true;
-            break;
-        }
-      }
-      if (!found) {
-        return VirtualIterator<pair<Literal*, TermList>>::getEmpty();
-      }
+    if (env.options->inductionRemodulationRedundancyCheck() && !hasTermToInductOn(arg.second.term(), arg.first)) {
+      return VirtualIterator<pair<Literal*, TermList>>::getEmpty();
     }
     return pvi(getSingletonIterator(make_pair(arg.first,rhs)));
   }
@@ -206,10 +101,21 @@ ClauseIterator InductionRemodulation::generateClauses(Clause* premise)
   if (InductionHelper::isInductionClause(premise) && InductionHelper::isInductionLiteral((*premise)[0])) {
     // forward result
     auto it1 = premise->getLiteralIterator();
-    auto it2 = getFilteredIterator(it1, InductionLiteralsFn());
-    auto it3 = getMapAndFlattenIterator(it2, RewriteableSubtermsFn());
-    auto it4 = getMapAndFlattenIterator(it3, ApplicableRewritesFn(_lhsIndex));
-    res1 = pvi(getMapAndFlattenIterator(it4, ForwardResultFn(premise, *this)));
+    auto it2 = getFilteredIterator(it1, [](Literal* lit){
+      return InductionHelper::isInductionLiteral(lit);
+    });
+    auto it3 = getMapAndFlattenIterator(it2, [](Literal* lit) {
+      NonVariableNonTypeIterator nvi(lit);
+      return pvi( pushPairIntoRightIterator(lit, getUniquePersistentIteratorFromPtr(&nvi)) );
+    });
+    auto it4 = getMapAndFlattenIterator(it3, [this](pair<Literal*, TermList> arg) {
+      return pvi( pushPairIntoRightIterator(arg, _lhsIndex->getGeneralizations(arg.second, true)) );
+    });
+    res1 = pvi(getMapAndFlattenIterator(it4, [this, premise](pair<pair<Literal*, TermList>, TermQueryResult> arg) {
+      TermQueryResult& qr = arg.second;
+      return perform(premise, arg.first.first, arg.first.second,
+        qr.clause, qr.literal, qr.term, qr.substitution, true, qr.constraints);
+    }));
   }
 
   // backward result
@@ -219,8 +125,18 @@ ClauseIterator InductionRemodulation::generateClauses(Clause* premise)
     auto itb1 = premise->getLiteralIterator();
     auto itb2 = getMapAndFlattenIterator(itb1,EqHelper::LHSIteratorFn(_salg->getOrdering()));
     auto itb3 = getMapAndFlattenIterator(itb2,ReverseLHSIteratorFn(premise));
-    auto itb4 = getMapAndFlattenIterator(itb3,RewritableResultsFn(_termIndex));
-    res2 = pvi(getMapAndFlattenIterator(itb4,BackwardResultFn(premise, *this)));
+    auto itb4 = getMapAndFlattenIterator(itb3, [this](pair<Literal*, TermList> arg) {
+      return pvi( pushPairIntoRightIterator(arg, _termIndex->getInstances(arg.second, true)) );
+    });
+    res2 = pvi(getMapAndFlattenIterator(itb4,[this, premise](pair<pair<Literal*, TermList>, TermQueryResult> arg) {
+      if(premise == arg.second.clause) {
+        return ClauseIterator::getEmpty();
+      }
+
+      TermQueryResult& qr = arg.second;
+      return perform(qr.clause, qr.literal, qr.term,
+        premise, arg.first.first, arg.first.second, qr.substitution, false, qr.constraints);
+    }));
   }
 
   auto it6 = getConcatenatedIterator(res1,res2);
@@ -234,8 +150,6 @@ ClauseIterator InductionRemodulation::perform(
     ResultSubstitutionSP subst, bool eqIsResult, UnificationConstraintStackSP constraints)
 {
   CALL("InductionRemodulation::perform");
-  ASS(env.options->inductionGen());
-  TimeCounter tc(TC_REMODULATION);
   // we want the rwClause and eqClause to be active
   // ASS(rwClause->store()==Clause::ACTIVE);
   ASS(eqClause->store()==Clause::ACTIVE);
@@ -245,14 +159,10 @@ ClauseIterator InductionRemodulation::perform(
   //   // cout << "subst " << endl << subst->tryGetRobSubstitution()->toString() << endl;
   //   cout << "eqIsResult " << eqIsResult << endl;
 
-  // the first checks the reference and the second checks the stack
-  bool hasConstraints = !constraints.isEmpty() && !constraints->isEmpty();
-
   unsigned rwLength = rwClause->length();
   // ASS_EQ(eqClause->length(), 1);
   unsigned eqLength = eqClause->length();
-  unsigned conLength = hasConstraints ? constraints->size() : 0;
-  unsigned newLength = rwLength + (eqLength - 1) + conLength;
+  unsigned newLength = rwLength + (eqLength - 1);
 
   ClauseIterator res = ClauseIterator::getEmpty();
   if (eqLHS.isVar()) {
@@ -280,9 +190,9 @@ ClauseIterator InductionRemodulation::perform(
     ((rwTerm==*rwLit->nthArgument(0) && !rwLit->nthArgument(1)->containsSubterm(tgtTermS)) ||
      (rwTerm==*rwLit->nthArgument(1) && !rwLit->nthArgument(0)->containsSubterm(tgtTermS)));
 
-  LiteralSubsetReplacement2 subsetReplacement(rwLit, rwTerm.term(), tgtTermS);
+  SingleOccurrenceReplacement sor(rwLit, rwTerm.term(), tgtTermS);
   Literal* tgtLit = nullptr;
-  while ((tgtLit = subsetReplacement.transformSubset())) {
+  while ((tgtLit = sor.transformSubset())) {
     Inference inf(GeneratingInference2(InferenceRule::INDUCTION_REMODULATION, rwClause, eqClause));
     Inference::Destroyer inf_destroyer(inf);
 
@@ -335,17 +245,21 @@ ClauseIterator InductionRemodulation::perform(
       // since we only rewrite one occurrence of rwTerm, the case
       // we are looking for is when one side is tgtTermS and the
       // other is unchanged
+      static const bool indGen = env.options->inductionGen();
       if (!shouldCheckRedundancy ||
-        (tgtTermS!=*tgtLit->nthArgument(0) && tgtTermS!=*tgtLit->nthArgument(1)))
+        (tgtTermS!=*tgtLit->nthArgument(0) && tgtTermS!=*tgtLit->nthArgument(1) &&
+         // in non-generalized case we check that the rewritten
+         // term is not contained anymore in the new literal
+         (indGen || !tgtLit->containsSubterm(rwTerm))))
       {
         RemodulationInfo rinfo;
         rinfo._eq = eqLit;
         rinfo._eqGr = eqLitS;
         rinfo._rest = rest;
+        rinfo._cl = eqClause;
         rinfos->insert(rinfo);
       }
       // TODO: if -av=off, we should check also that the rest of rwClause is greater than the eqClause
-      // TODO: check in non-generalized case that
 
       if (rinfos->isEmpty()) {
         delete rinfos;
@@ -353,7 +267,8 @@ ClauseIterator InductionRemodulation::perform(
         newCl->setRemodulationInfo(rinfos);
       }
     }
-    newCl->setInductionLemma(true);
+    newCl->markInductionLemma();
+    env.statistics->inductionRemodulation++;
     res = pvi(getConcatenatedIterator(res, getSingletonIterator(newCl)));
   }
 

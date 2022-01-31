@@ -203,7 +203,7 @@ public:
   void setRemodulationInfo(void* r) { _remodulationInfo = r; }
 
   bool isInductionLemma() const { return _inductionLemma; }
-  void setInductionLemma(bool i) { _inductionLemma = i; }
+  void markInductionLemma() { _inductionLemma = true; }
 
   bool skip() const;
 

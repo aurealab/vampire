@@ -260,16 +260,19 @@ Index* IndexManager::create(IndexType t)
     isGenerating = true;
     break;
   case REMODULATION_LHS_SUBST_TREE:
-//    tis=new TermSubstitutionTree();
     tis=new CodeTreeTIS();
     res=new RemodulationLHSIndex(tis, _alg->getOrdering());
     isGenerating = true;
     break;
   case REWRITING_LHS_INDEX:
-//    tis=new TermSubstitutionTree();
     tis=new CodeTreeTIS();
     res=new RewritingLHSIndex(tis, _alg->getOrdering());
     isGenerating = true;
+    break;
+  case INDUCTION_REMODULATION_LITERAL_INDEX:
+    is=new LiteralSubstitutionTree();
+    res=new InductionRemodulationLiteralIndex(is);
+    isGenerating = false;
     break;
 
   case FW_SUBSUMPTION_CODE_TREE:
@@ -322,11 +325,6 @@ Index* IndexManager::create(IndexType t)
     tis=new TermSubstitutionTree(useConstraints);
     res=new InductionInequalitySubtermIndex(tis);
     isGenerating = true;
-    break;
-  case INDUCTION_REMODULATION_LITERAL_INDEX:
-    is=new LiteralSubstitutionTree();
-    res=new InductionRemodulationLiteralIndex(is);
-    isGenerating = false;
     break;
 
   default:

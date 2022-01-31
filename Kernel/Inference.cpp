@@ -765,6 +765,10 @@ vstring Kernel::ruleName(InferenceRule rule)
     return "trivial inequality removal";
   case InferenceRule::FACTORING:
     return "factoring";
+  case InferenceRule::INDUCTION_REMODULATION:
+    return "induction remodulation";
+  case InferenceRule::INDUCTION_FORWARD_REWRITING:
+    return "induction forward rewriting";
   case InferenceRule::CONSTRAINED_FACTORING:
     return "constrained factoring";
   case InferenceRule::SUBSUMPTION_RESOLUTION:
@@ -777,10 +781,6 @@ vstring Kernel::ruleName(InferenceRule rule)
     return "fn def demodulation";
   case InferenceRule::IH_REWRITING:
     return "induction hypothesis rewriting";
-  case InferenceRule::INDUCTION_REMODULATION:
-    return "induction remodulation";
-  case InferenceRule::INDUCTION_FORWARD_REWRITING:
-    return "induction forward rewriting";
   case InferenceRule::FUNCTION_DEFINITION:
     return "function definition";
   case InferenceRule::CONSTRAINED_SUPERPOSITION:

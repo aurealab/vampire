@@ -211,27 +211,47 @@ void RemodulationLHSIndex::handleClause(Clause* c, bool adding)
       if (!termHasAllVarsOfClause(rhs, c)) {
         continue;
       }
-      if (env.options->inductionRemodulationRedundancyCheck()) {
-        NonVariableIterator stit(lhs.term());
-        bool found = false;
-        while (stit.hasNext()) {
-          auto st = stit.next();
-          if (InductionHelper::isInductionTermFunctor(st.term()->functor()) &&
-            (InductionHelper::isStructInductionFunctor(st.term()->functor()) ||
-            InductionHelper::isIntInductionTermListInLiteral(st, lit))) {
-              found = true;
-              break;
-          }
-        }
-        if (!found) {
-          continue;
-        }
+      if (env.options->inductionRemodulationRedundancyCheck() && !hasTermToInductOn(lhs.term(), lit)) {
+        continue;
       }
       if (adding) {
         _is->insert(rhs, lit, c);
       }
       else {
         _is->remove(rhs, lit, c);
+      }
+    }
+  }
+}
+
+void RemodulationSubtermIndex::handleClause(Clause* c, bool adding)
+{
+  CALL("RemodulationSubtermIndex::handleClause");
+
+  if (!InductionHelper::isInductionClause(c)) {
+    return;
+  }
+
+  static DHSet<TermList> inserted;
+
+  for (unsigned i=0;i<c->length();i++) {
+    Literal* lit = (*c)[i];
+    if (!InductionHelper::isInductionLiteral(lit)) {
+      continue;
+    }
+    inserted.reset();
+    SubtermIterator it(lit);
+    while (it.hasNext()) {
+      TermList tl = it.next();
+      if (!inserted.insert(tl)) {
+        it.right();
+        continue;
+      }
+      ASS(tl.isTerm());
+      if (adding) {
+        _is->insert(tl, lit, c);
+      } else {
+        _is->remove(tl, lit, c);
       }
     }
   }
@@ -352,9 +372,7 @@ void InductionTermIndex::handleClause(Clause* c, bool adding)
           TermList tl = it.next();
           if (!tl.term()) continue;
           if (InductionHelper::isInductionTermFunctor(tl.term()->functor()) &&
-              (InductionHelper::isStructInductionFunctor(tl.term()->functor()) ||
-               InductionHelper::isIntInductionTermListInLiteral(tl, lit))) {
-            // cout << "INDIND " << *lit << " " << tl << " " << adding << endl;
+              InductionHelper::isIntInductionTermListInLiteral(tl, lit)) {
             if (adding) {
               _is->insert(tl, lit, c);
             } else {
@@ -366,40 +384,6 @@ void InductionTermIndex::handleClause(Clause* c, bool adding)
     }
   }
 }
-
-void RemodulationSubtermIndex::handleClause(Clause* c, bool adding)
-{
-  CALL("RemodulationSubtermIndex::handleClause");
-
-  if (!InductionHelper::isInductionClause(c)) {
-    return;
-  }
-
-  static DHSet<TermList> inserted;
-
-  for (unsigned i=0;i<c->length();i++) {
-    Literal* lit = (*c)[i];
-    if (!InductionHelper::isInductionLiteral(lit)) {
-      continue;
-    }
-    inserted.reset();
-    SubtermIterator it(lit);
-    while (it.hasNext()) {
-      TermList tl = it.next();
-      if (!inserted.insert(tl)) {
-        it.right();
-        continue;
-      }
-      ASS(tl.isTerm());
-      if (adding) {
-        _is->insert(tl, lit, c);
-      } else {
-        _is->remove(tl, lit, c);
-      }
-    }
-  }
-}
-
 
 /////////////////////////////////////////////////////
 // Indices for higher-order inferences from here on//

@@ -286,8 +286,6 @@ enum class InferenceRule : unsigned char {
   FNDEF_REWRITING,
   /** induction hypothesis rewriting inference */
   IH_REWRITING,
-  INDUCTION_REMODULATION,
-  INDUCTION_FORWARD_REWRITING,
   FUNCTION_DEFINITION,
   /** superposition with constraints */
   CONSTRAINED_SUPERPOSITION,
@@ -362,6 +360,10 @@ enum class InferenceRule : unsigned char {
   VPI_ELIMINATION,
 
   HOL_EQUALITY_ELIMINATION,
+
+  INDUCTION_REMODULATION,
+
+  INDUCTION_FORWARD_REWRITING,
 
   INTERNAL_GENERATING_INFERNCE_LAST,
 

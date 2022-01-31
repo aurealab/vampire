@@ -31,7 +31,7 @@
 
 #include "Inferences/BinaryResolution.hpp"
 #include "Inferences/InductionHelper.hpp"
-#include "Inferences/InductionRemodulation.hpp"
+#include "InductionRemodulation.hpp"
 
 #include "GeneralInduction.hpp"
 
@@ -169,9 +169,7 @@ void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Li
           TermOccurrenceReplacement tr(kv.first.inductionTerms(), eg, main.literal);
           auto mainLitGen = tr.transformLit();
           ASS_NEQ(mainLitGen, main.literal); // main literal should be inducted on
-          if (RemodulationInfo::isRedundant(mainLitGen,
-                main.clause->getRemodulationInfo<DHSet<RemodulationInfo>>(),
-                _salg->getOrdering())) {
+          if (_remodulationManager->isRedundant(mainLitGen, main.clause->getRemodulationInfo<DHSet<RemodulationInfo>>())) {
             continue;
           }
           vvector<pair<Literal*, SLQueryResult>> sidesGeneralized;
@@ -180,9 +178,7 @@ void GeneralInduction::process(InductionClauseIterator& res, Clause* premise, Li
             TermOccurrenceReplacement tr(kv.first.inductionTerms(), eg, kv2.first);
             auto sideLitGen = tr.transformLit();
             if (sideLitGen != kv2.first) { // side literals may be discarded if they contain no induction term occurrence
-              if (RemodulationInfo::isRedundant(sideLitGen,
-                    kv2.second->getRemodulationInfo<DHSet<RemodulationInfo>>(),
-                    _salg->getOrdering())) {
+              if (_remodulationManager->isRedundant(sideLitGen, kv2.second->getRemodulationInfo<DHSet<RemodulationInfo>>())) {
                 redundant = true;
                 break;
               }
@@ -220,6 +216,7 @@ void GeneralInduction::attach(SaturationAlgorithm* salg)
   _splitter=_salg->getSplitter();
   _index = static_cast<TermIndex *>(
       _salg->getIndexManager()->request(DEMODULATION_SUBTERM_SUBST_TREE));
+  _remodulationManager = _salg->getRemodulationManager();
 }
 
 void GeneralInduction::detach()

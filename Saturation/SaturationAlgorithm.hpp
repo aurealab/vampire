@@ -122,6 +122,8 @@ public:
 
   Splitter* getSplitter() { return _splitter; }
 
+  RemodulationManager* getRemodulationManager() { return _remodulationManager; }
+
 protected:
   virtual void init();
   virtual MainLoopResult runImpl();
@@ -210,6 +212,7 @@ protected:
   SymElOutput* _symEl;
   AnswerLiteralManager* _answerLiteralManager;
   Instantiation* _instantiation;
+  RemodulationManager* _remodulationManager;
 
 
   SubscriptionData _passiveContRemovalSData;
