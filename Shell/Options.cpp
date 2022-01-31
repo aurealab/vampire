@@ -1291,6 +1291,12 @@ void Options::init()
             _inductionConsequenceGeneration.reliesOn(_induction.is(notEqual(Induction::NONE)));
             _lookup.insert(&_inductionConsequenceGeneration);
 
+            _inductionConsequenceGenerationRatio = StringOptionValue("induction_consequence_generation_ratio", "indcgr", "2,1");
+            _inductionConsequenceGenerationRatio.description = "The ratio for induction and non-induction clauses when consequence generation is on.";
+            _lookup.insert(&_inductionConsequenceGenerationRatio);
+            _inductionConsequenceGenerationRatio.reliesOn(_inductionConsequenceGeneration.is(notEqual(InductionConsequenceGeneration::OFF)));
+            _inductionConsequenceGenerationRatio.tag(OptionTag::SATURATION);
+
             _inductionRemodulationRedundancyCheck = BoolOptionValue("induction_remodulation_redundancy_check","indrrc",true);
             _inductionRemodulationRedundancyCheck.description = "Try to do only non-redundant inductions";
             _inductionRemodulationRedundancyCheck.tag(OptionTag::INFERENCES);
@@ -3483,6 +3489,24 @@ Lib::vvector<int> Options::positiveLiteralSplitQueueRatios() const
   }
 
   return inputRatios;
+}
+
+Lib::vvector<int> Options::inductionConsequenceGenerationRatio() const
+{
+  CALL("Options::inductionConsequenceGenerationRatio");
+  auto ratio = parseCommaSeparatedList<int>(_inductionConsequenceGenerationRatio.actualValue);
+
+  // sanity checks
+  if (ratio.size() != 2) {
+    USER_ERROR("Wrong usage of option '-indcgr'. It requires exactly two values (e.g. '2,1')");
+  }
+  for (unsigned i = 0; i < 2; i++) {
+    if(ratio[i] <= 0) {
+      USER_ERROR("Each ratio (supplied by option '-plsqr') needs to be a positive integer");
+    }
+  }
+
+  return ratio;
 }
 
 Lib::vvector<float> Options::positiveLiteralSplitQueueCutoffs() const

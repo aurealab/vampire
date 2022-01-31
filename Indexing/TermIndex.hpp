@@ -189,23 +189,6 @@ private:
 };
 
 /**
- * Term index for induction
- */
-class InductionTermIndex
-: public TermIndex
-{
-public:
-  CLASS_NAME(InductionTermIndex);
-  USE_ALLOCATOR(InductionTermIndex);
-
-  InductionTermIndex(TermIndexingStructure* is)
-  : TermIndex(is) {}
-
-protected:
-  void handleClause(Clause* c, bool adding);
-};
-
-/**
  * Term index for general rewriting
  */
 class RewritingLHSIndex
@@ -223,6 +206,22 @@ private:
   Ordering& _ord;
 };
 
+/**
+ * Term index for induction
+ */
+class InductionTermIndex
+: public TermIndex
+{
+public:
+  CLASS_NAME(InductionTermIndex);
+  USE_ALLOCATOR(InductionTermIndex);
+
+  InductionTermIndex(TermIndexingStructure* is)
+  : TermIndex(is) {}
+
+protected:
+  void handleClause(Clause* c, bool adding);
+};
 
 /////////////////////////////////////////////////////
 // Indices for higher-order inferences from here on//
