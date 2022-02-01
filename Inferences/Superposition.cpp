@@ -45,6 +45,8 @@
 #include "Superposition.hpp"
 #include "Shell/UnificationWithAbstractionConfig.hpp"
 
+#include "InductionRemodulation.hpp"
+
 #if VDEBUG
 #include <iostream>
 using namespace std;
@@ -477,7 +479,8 @@ Clause* Superposition::performSuperposition(
     return 0;
   }
 
-  if(rwLitS->isEquality() && (rwLitS->isNegative() || env.options->inductionConsequenceGeneration()==Options::InductionConsequenceGeneration::OFF)) {
+  const bool shouldRewriteSmallerSide = env.options->inductionConsequenceGeneration()!=Options::InductionConsequenceGeneration::OFF && rwLit->isPositive();
+  if(rwLitS->isEquality() && !shouldRewriteSmallerSide) {
     //check that we're not rewriting only the smaller side of an equality
     TermList arg0=*rwLitS->nthArgument(0);
     TermList arg1=*rwLitS->nthArgument(1);

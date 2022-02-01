@@ -63,7 +63,7 @@ inline bool termHasAllVarsOfClause(TermList t, Clause* cl) {
 inline bool canUseForRewrite(Clause* cl) {
   return cl->length() == 1 ||
     (env.options->inductionConsequenceGeneration() == Options::InductionConsequenceGeneration::ON &&
-     isFormulaTransformation(cl->inference().rule()));
+     (isFormulaTransformation(cl->inference().rule()) || cl->inference().rule()==InferenceRule::FUNCTION_DEFINITION));
 }
 
 inline bool hasTermToInductOn(Term* t, Literal* l) {
@@ -149,7 +149,7 @@ public:
     ASS(InductionHelper::isInductionLiteral((*premise)[0]));
     ClauseIterator clIt = _induction->generateClauses(premise);
     clIt = pvi(getConcatenatedIterator(clIt, _inductionRemodulation->generateClauses(premise)));
-    // clIt = pvi(getConcatenatedIterator(clIt, _rewriting->generateClauses(premise)));
+    clIt = pvi(getConcatenatedIterator(clIt, _rewriting->generateClauses(premise)));
     return ClauseGenerationResult {
       .clauses          = clIt,
       .premiseRedundant = false,

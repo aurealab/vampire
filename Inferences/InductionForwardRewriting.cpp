@@ -31,6 +31,39 @@
 #include "InductionHelper.hpp"
 #include "InductionRemodulation.hpp"
 
+TermIterator getSmallerSideRewritableSubtermIterator(Literal* lit, const Ordering& ord)
+{
+  CALL("getSmallerSideRewritableSubtermIterator");
+
+  if (lit->isEquality()) {
+    TermList sel;
+    switch(ord.getEqualityArgumentOrder(lit)) {
+    case Ordering::INCOMPARABLE:
+    case Ordering::EQUAL: {
+      return TermIterator::getEmpty();
+    }
+    case Ordering::GREATER:
+    case Ordering::GREATER_EQ:
+      sel=*lit->nthArgument(1);
+      break;
+    case Ordering::LESS:
+    case Ordering::LESS_EQ:
+      sel=*lit->nthArgument(0);
+      break;
+#if VDEBUG
+    default:
+      ASSERTION_VIOLATION;
+#endif
+    }
+    if (!sel.isTerm()) {
+      return TermIterator::getEmpty();
+    }
+    return getUniquePersistentIterator(vi(new NonVariableIterator(sel.term(), true)));
+  }
+
+  return TermIterator::getEmpty();
+}
+
 ClauseIterator InductionForwardRewriting::generateClauses(Clause *premise)
 {
   CALL("InductionForwardRewriting::generateClauses");
@@ -41,10 +74,9 @@ ClauseIterator InductionForwardRewriting::generateClauses(Clause *premise)
 
     // Get an iterator of pairs of selected literals and rewritable subterms
     // of those literals. Here all subterms of a literal are rewritable.
-    auto itf2 = getMapAndFlattenIterator(itf1, [](Literal *lit) {
-      NonVariableIterator nvi(lit);
-      return pvi(pushPairIntoRightIterator(lit,
-        getUniquePersistentIteratorFromPtr(&nvi)));
+    auto itf2 = getMapAndFlattenIterator(itf1, [this](Literal *lit) {
+      TermIterator it = getSmallerSideRewritableSubtermIterator(lit, _salg->getOrdering());
+      return pvi( pushPairIntoRightIterator(lit, it) );
     });
 
     // Get clauses with a function definition literal whose lhs is a generalization of the rewritable subterm,
@@ -74,7 +106,7 @@ ClauseIterator InductionForwardRewriting::generateClauses(Clause *premise)
       return pvi(pushPairIntoRightIterator(arg, _tindex->getInstances(arg.second, true)));
     });
 
-    res = pvi(getMappingIterator(itb4, [this,premise](pair<pair<Literal*, TermList>, TermQueryResult> arg) -> Clause* {
+    res = pvi(getConcatenatedIterator(res, pvi(getMappingIterator(itb4, [this,premise](pair<pair<Literal*, TermList>, TermQueryResult> arg) -> Clause* {
       if(premise == arg.second.clause) {
         return nullptr;
       }
@@ -83,7 +115,7 @@ ClauseIterator InductionForwardRewriting::generateClauses(Clause *premise)
       return InductionForwardRewriting::perform(
         qr.clause, qr.literal, qr.term,
         premise, arg.first.first, arg.first.second, qr.substitution, false, _salg->getOrdering());
-    }));
+    }))));
   }
   // Remove null elements
   return pvi(getFilteredIterator(res, NonzeroFn()));
@@ -101,13 +133,12 @@ Clause *InductionForwardRewriting::perform(
     return 0;
   }
 
-  // ASS_REP(!eqLHS.isVar(), *eqClause);
+  if (rwClause->getInductionPhase()>=2) {
+    return 0;
+  }
 
   TermList tgtTerm = EqHelper::getOtherEqualitySide(eqLit, eqLHS);
-
   TermList tgtTermS = eqIsResult ? subst->applyToBoundResult(tgtTerm) : subst->applyToBoundQuery(tgtTerm);
-  Literal* eqLitS = eqIsResult ? subst->applyToBoundResult(eqLit) : subst->applyToBoundQuery(eqLit);
-
   Literal *tgtLitS = EqHelper::replace(rwLit, rwTerm, tgtTermS);
   if (EqHelper::isEqTautology(tgtLitS)) {
     return 0;
@@ -154,39 +185,7 @@ Clause *InductionForwardRewriting::perform(
       }
     }
   }
-
-  const auto rinfos = rwClause->getRemodulationInfo<DHSet<RemodulationInfo>>();
-  // TODO not sure this block helps a lot, find out
-  if (rinfos) {
-    DHSet<RemodulationInfo>::Iterator rit(*rinfos);
-    while (rit.hasNext()) {
-      auto rinfo = rit.next();
-      if (rinfo._eqGr == eqLitS) {
-        // if rest from rinfo contains current rest,
-        // the rewriting with eqClause or a clause
-        // that subsumes eqClause was done
-        bool contains = !rinfo._rest.empty();
-        for (const auto& kv : rinfo._rest) {
-          if (!rest.count(kv)) {
-            contains = false;
-            break;
-          }
-        }
-        if (contains) {
-          res->destroy();
-          return 0;
-        }
-      }
-    }
-  }
-
-  auto rinfosU = RemodulationInfo::update(res, tgtLitS, rinfos, ord);
-
-  if (rinfosU->isEmpty()) {
-    delete rinfosU;
-  } else {
-    res->setRemodulationInfo(rinfosU);
-    res->markInductionLemma();
-  }
+  res->setInductionPhase(1);
+  env.statistics->inductionForwardRewriting++;
   return res;
 }

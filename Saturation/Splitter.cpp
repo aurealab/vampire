@@ -1303,8 +1303,8 @@ Clause* Splitter::buildAndInsertComponentClause(SplitLevel name, unsigned size, 
         delete rinfosNew;
       } else {
         compCl->setRemodulationInfo(rinfosNew);
-        compCl->markInductionLemma();
       }
+      compCl->setInductionPhase(compCl->getInductionPhase());
     }
   } else {
     compCl->setAge(AGE_NOT_FILLED);

@@ -267,7 +267,7 @@ ClauseIterator InductionRemodulation::perform(
         newCl->setRemodulationInfo(rinfos);
       }
     }
-    newCl->markInductionLemma();
+    newCl->setInductionPhase(2);
     env.statistics->inductionRemodulation++;
     res = pvi(getConcatenatedIterator(res, getSingletonIterator(newCl)));
   }

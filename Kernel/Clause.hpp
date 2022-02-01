@@ -202,8 +202,9 @@ public:
   const T* getRemodulationInfo() const { return static_cast<const T*>(_remodulationInfo); }
   void setRemodulationInfo(void* r) { _remodulationInfo = r; }
 
-  bool isInductionLemma() const { return _inductionLemma; }
-  void markInductionLemma() { _inductionLemma = true; }
+  bool isInductionLemma() const { return _inductionPhase; }
+  unsigned getInductionPhase() const { return _inductionPhase; }
+  void setInductionPhase(unsigned p) { _inductionPhase = p; }
 
   bool skip() const;
 
@@ -377,7 +378,7 @@ protected:
   unsigned _extensionalityTag : 1;
   /** Clause is a splitting component. */
   unsigned _component : 1;
-  unsigned _inductionLemma : 1;
+  unsigned _inductionPhase : 2;
 
   /** storage class */
   Store _store : 3;
