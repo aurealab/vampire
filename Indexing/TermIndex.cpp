@@ -88,7 +88,9 @@ void SuperpositionSubtermIndex::handleClause(Clause* c, bool adding)
     Literal* lit=(*c)[i];
     TermIterator rsti;
     if(!env.options->combinatorySup()){
-      rsti = EqHelper::getSubtermIterator(lit,_ord);
+      rsti = env.options->inductionConsequenceGeneration()!=Options::InductionConsequenceGeneration::OFF
+              ? getUniquePersistentIterator(vi(new NonVariableIterator(lit)))
+              : EqHelper::getSubtermIterator(lit,_ord);
     } else {
       rsti = EqHelper::getFoSubtermIterator(lit,_ord);
     }

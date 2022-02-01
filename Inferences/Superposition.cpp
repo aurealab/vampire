@@ -114,7 +114,9 @@ struct Superposition::RewriteableSubtermsFn
   {
     CALL("Superposition::RewriteableSubtermsFn()");
     TermIterator it = env.options->combinatorySup() ? EqHelper::getFoSubtermIterator(lit, _ord) :
-                                                      EqHelper::getSubtermIterator(lit, _ord);
+                                                      env.options->inductionConsequenceGeneration()!=Options::InductionConsequenceGeneration::OFF
+                                                        ? getUniquePersistentIterator(vi(new NonVariableIterator(lit)))
+                                                        : EqHelper::getSubtermIterator(lit, _ord);
     return pvi( pushPairIntoRightIterator(lit, it) );
   }
 
@@ -479,19 +481,26 @@ Clause* Superposition::performSuperposition(
     return 0;
   }
 
-  const bool shouldRewriteSmallerSide = env.options->inductionConsequenceGeneration()!=Options::InductionConsequenceGeneration::OFF && rwLit->isPositive();
-  if(rwLitS->isEquality() && !shouldRewriteSmallerSide) {
+  // TODO: this is a bit sketchy, fix it
+  const bool shouldRewriteSmallerSide = env.options->inductionConsequenceGeneration()!=Options::InductionConsequenceGeneration::OFF && rwLit->isPositive()
+    && canUseForRewrite(rwClause) && litHasAllVarsOfClause(rwLit, rwClause)
+    && (eqLHS.isVar() || !hasTermToInductOn(eqLHS.term(), eqLit));
+  if(rwLitS->isEquality()) {
     //check that we're not rewriting only the smaller side of an equality
     TermList arg0=*rwLitS->nthArgument(0);
     TermList arg1=*rwLitS->nthArgument(1);
 
     if(!arg0.containsSubterm(rwTermS)) {
       if(Ordering::isGorGEorE(ordering.getEqualityArgumentOrder(rwLitS))) {
-        return 0;
+        if (!shouldRewriteSmallerSide || !termHasAllVarsOfClause(*rwLit->nthArgument(1), rwClause)) {
+          return 0;
+        }
       }
     } else if(!arg1.containsSubterm(rwTermS)) {
       if(Ordering::isGorGEorE(Ordering::reverse(ordering.getEqualityArgumentOrder(rwLitS)))) {
-        return 0;
+        if (!shouldRewriteSmallerSide || !termHasAllVarsOfClause(*rwLit->nthArgument(0), rwClause)) {
+          return 0;
+        }
       }
     }
   }
