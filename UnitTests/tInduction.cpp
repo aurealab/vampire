@@ -50,15 +50,16 @@ public:
     BacktrackData btd;
     _subst.bdRecord(btd);
     if (!TestUtils::permEq(*lhs, *rhs, [this](Literal* l, Literal* r) -> bool {
-      if (l->polarity() != r->polarity() || !l->ground()) {
+      if (l->polarity() != r->polarity()) {
         return false;
       }
       if (!_subst.match(Kernel::TermList(r), 0, Kernel::TermList(l), 1)) {
-        if (l->isEquality() && r->isEquality()) {
-          return _subst.match(*r->nthArgument(0), 0, *l->nthArgument(1), 1) &&
-            _subst.match(*r->nthArgument(1), 0, *l->nthArgument(0), 1);
+        if (!l->isEquality() || !r->isEquality() ||
+          !_subst.match(*r->nthArgument(0), 0, *l->nthArgument(1), 1) ||
+          !_subst.match(*r->nthArgument(1), 0, *l->nthArgument(0), 1))
+        {
+          return false;
         }
-        return false;
       }
       // we check that so far each variable is mapped to a unique Skolem constant
       DHMap<TermList, unsigned> inverse;
@@ -137,6 +138,7 @@ private:
   DECL_TERM_ALGEBRA(s, {b, r})                                                             \
   __ALLOW_UNUSED(                                                                          \
     auto r0 = r.dtor(0);                                                                   \
+    auto subterm_s = subtermRelationOfTaSort(s);                                           \
   )                                                                                        \
   DECL_CONST(b1, u)                                                                        \
   DECL_CONST(b2, u)                                                                        \
@@ -210,19 +212,26 @@ TEST_GENERATION_INDUCTION(test_05,
       })
     )
 
-// TODO this case is a bit hard to test since new predicates are introduced,
-// so we need to customize the test suite for this even more, checking certain
-// properties of these new predicates and matching it with some literals.
-// This induction mode is not that useful compared to other sik modes to make
-// the effort worthwhile.
-// // normal case sik=three
-// TEST_GENERATION_INDUCTION(test_06,
-//     Generation::TestCase()
-//       .options({ { "induction", "struct" }, { "structural_induction_kind", "three" } })
-//       .indices({ comparisonIndex() })
-//       .input( clause({  f(sK1,sK2) != g(sK1) }))
-//       .expected({ })
-//     )
+// normal case sik=three
+TEST_GENERATION_INDUCTION(test_06,
+    Generation::TestCase()
+      .options({ { "induction", "struct" }, { "structural_induction_kind", "three" } })
+      .indices({ comparisonIndex() })
+      .input( clause({  f(sK1,sK2) != g(sK1) }))
+      .expected({
+        // sK1
+        clause({ f(x,sK2) != g(x) }),
+        clause({ x != r(r0(x)), subterm_s(r0(x),x) }),
+        clause({ ~subterm_s(y,x), f(y,sK2) == g(y) }),
+        clause({ ~subterm_s(r(z),x), subterm_s(z,x) }),
+
+        // sK2
+        clause({ f(sK1,x3) != g(sK1) }),
+        clause({ x3 != r(r0(x3)), subterm_s(r0(x3),x3) }),
+        clause({ ~subterm_s(x4,x3), f(sK1,x4) == g(sK1) }),
+        clause({ ~subterm_s(r(x5),x3), subterm_s(x5,x3) })
+      })
+    )
 
 // generalizations
 TEST_GENERATION_INDUCTION(test_07,
