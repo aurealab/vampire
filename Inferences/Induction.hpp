@@ -90,8 +90,7 @@ public:
   CLASS_NAME(Induction);
   USE_ALLOCATOR(Induction);
 
-  Induction()
-    : _lis(false), _ctIntFin(), _ctInt() {}
+  Induction() : _lis(false), _ctInt() {}
 
   void attach(SaturationAlgorithm* salg) override;
   void detach() override;
@@ -109,7 +108,6 @@ private:
   LiteralIndex* _comparisonIndex = nullptr;
   TermIndex* _inductionTermIndex = nullptr;
   LiteralSubstitutionTree _lis;
-  ClauseCodeTree _ctIntFin;
   ClauseCodeTree _ctInt;
 };
 
@@ -120,8 +118,8 @@ class InductionClauseIterator
 public:
   // all the work happens in the constructor!
   InductionClauseIterator(Clause* premise, InductionHelper helper, const Options& opt,
-    LiteralIndexingStructure& lis, ClauseCodeTree& ctIntFin, ClauseCodeTree& ctInt)
-    : _clauses(), _helper(helper), _opt(opt), _lis(lis), _ctIntFin(ctIntFin), _ctInt(ctInt)
+    LiteralIndexingStructure& lis, ClauseCodeTree& ctInt)
+    : _clauses(), _helper(helper), _opt(opt), _lis(lis), _ctInt(ctInt), _qrsToResolve()
   {
     processClause(premise);
   }
@@ -166,7 +164,8 @@ private:
   // Note: indLits may be created in this method, but it needs to be destroyed outside of it.
   void generalizeAndPerformIntInduction(Clause* premise, Literal* origLit, Term* origTerm, List<pair<Literal*, InferenceRule>>*& indLits, Term* indTerm, bool increasing, TermQueryResult& bound1, TermQueryResult* optionalBound2);
 
-  void resolveClauses(const DHSet<pair<QR, QR>>& infiniteTQRs, const DHSet<tuple<QR, QR, QR>>& finiteTQRs);
+  void resolveClauses();
+  void addQRToResolve(Stack<QR>& qr);
   void performIntInduction(Clause* premise, Literal* origLit, Literal* lit, Term* t, InferenceRule rule, bool increasing, const TermQueryResult& bound1, TermQueryResult* optionalBound2);
 
   void performStructInductionOne(Clause* premise, Literal* origLit, Literal* lit, Term* t, InferenceRule rule);
@@ -181,8 +180,8 @@ private:
   InductionHelper _helper;
   const Options& _opt;
   LiteralIndexingStructure& _lis;
-  ClauseCodeTree& _ctIntFin;
   ClauseCodeTree& _ctInt;
+  DHSet<Stack<QR>> _qrsToResolve;
 };
 
 };

@@ -18,6 +18,7 @@
 #include "Lib/TimeCounter.hpp"
 #include "Lib/VirtualIterator.hpp"
 
+#include "Kernel/Clause.hpp"
 #include "Kernel/Renaming.hpp"
 #include "Kernel/SubstHelper.hpp"
 #include "Kernel/Term.hpp"

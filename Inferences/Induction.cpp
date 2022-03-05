@@ -85,8 +85,8 @@ public:
       return result;
     }
     ready=true;
-    result=cm->next(resolvedQueryLit);
-    ASS(!result || resolvedQueryLit<1000000);
+    int temp;
+    result=cm->next(temp);
     return result;
   }
 
@@ -94,17 +94,11 @@ public:
   {
     ASS(result);
     ready=false;
-    if(resolvedQueryLit==-1) {
-      return ClauseSResQueryResult(result);
-    }
-    else {
-      return ClauseSResQueryResult(result, resolvedQueryLit);
-    }
+    return ClauseSResQueryResult(result);
   }
 private:
   bool ready;
   Clause* result;
-  int resolvedQueryLit;
   Indexing::ClauseCodeTree::ClauseMatcher* cm;
 };
 
@@ -334,7 +328,7 @@ ClauseIterator Induction::generateClauses(Clause* premise)
 {
   CALL("Induction::generateClauses");
 
-  return pvi(InductionClauseIterator(premise, InductionHelper(_comparisonIndex, _inductionTermIndex, _salg->getSplitter()), getOptions(), _lis, _ctIntFin, _ctInt));
+  return pvi(InductionClauseIterator(premise, InductionHelper(_comparisonIndex, _inductionTermIndex, _salg->getSplitter()), getOptions(), _lis, _ctInt));
 }
 
 void InductionClauseIterator::processClause(Clause* premise)
@@ -351,53 +345,29 @@ void InductionClauseIterator::processClause(Clause* premise)
   if (InductionHelper::isIntInductionTwoOn() && InductionHelper::isIntegerComparison(premise)) {
     processIntegerComparison(premise, (*premise)[0]);
   }
+#ifdef NEW
+  resolveClauses();
+#endif
 }
 
-Clause* generateClause(Clause* queryCl, Literal* queryLit, SLQueryResult qr, ResultSubstitution* subst = nullptr)
+bool contains(Literal* lit, Literal** lits, unsigned length)
 {
-  CALL("generateClause");
-  unsigned clength = queryCl->length();
-  unsigned dlength = qr.clause->length();
-
-  Inference inf(GeneratingInference2(InferenceRule::RESOLUTION, queryCl, qr.clause));
-  unsigned newLength = clength+dlength-2;
-  Clause* res = new(newLength) Clause(newLength, inf);
-
-  unsigned next = 0;
-  for(unsigned i=0;i<clength;i++) {
-    Literal* curr=(*queryCl)[i];
-    if(curr!=queryLit) {
-      ASS(next < newLength);
-      (*res)[next] = curr;
-      next++;
+  for (int i = length-1; i >= 0; i--) {
+    if (lits[i]==lit) {
+      return true;
     }
   }
-
-  for(unsigned i=0;i<dlength;i++) {
-    Literal* curr=(*qr.clause)[i];
-    if(curr!=qr.literal) {
-      if (subst) {
-        (*res)[next] = subst->applyToBoundResult(curr);
-      } else {
-        (*res)[next] = curr;
-      }
-      next++;
-    }
-  }
-  ASS_EQ(next,newLength);
-
-  env.statistics->resolution++;
-  return res;
+  return false;
 }
 
-Clause* generateClause(const vvector<QR>& queryCls, Clause* cl, Clause* conclusionCl)
+Clause* generateClause(const Stack<QR>& queryCls, Clause* cl, Literal** conclusionLits, unsigned conclusionLength)
 {
   CALL("generateClause");
-  unsigned newLength = cl->length() - conclusionCl->length();
+  unsigned newLength = cl->length() - conclusionLength;
   auto premises = UnitList::singleton(cl);
-  for (const auto& kv : queryCls) {
-    newLength += kv.second->length() - 1;
-    UnitList::push(kv.second, premises);
+  for (const auto& qr : queryCls) {
+    newLength += qr.second->length() - 1;
+    UnitList::push(qr.second, premises);
   }
 
   Inference inf(GeneratingInferenceMany(InferenceRule::RESOLUTION, premises));
@@ -406,17 +376,17 @@ Clause* generateClause(const vvector<QR>& queryCls, Clause* cl, Clause* conclusi
   unsigned next = 0;
   for(unsigned i=0;i<cl->length();i++) {
     Literal* curr=(*cl)[i];
-    if(!conclusionCl->contains(curr)) {
+    if(!contains(curr, conclusionLits, conclusionLength)) {
       ASS(next < newLength);
       (*res)[next] = curr;
       next++;
     }
   }
 
-  for (const auto& kv : queryCls) {
-    for(unsigned i=0;i<kv.second->length();i++) {
-      Literal* curr=(*kv.second)[i];
-      if(curr!=kv.first) {
+  for (const auto& qr : queryCls) {
+    for (unsigned i = 0; i < qr.second->length(); i++) {
+      Literal* curr = (*qr.second)[i];
+      if(curr != qr.first) {
         (*res)[next] = curr;
         next++;
       }
@@ -436,44 +406,36 @@ ClauseSResResultIterator getMultiClauseIterator(ClauseCodeTree& ct, LiteralStack
   return vi( new MultiClauseIterator(&ct, st) );
 }
 
-void InductionClauseIterator::resolveClauses(const DHSet<pair<QR, QR>>& infiniteTQRs, const DHSet<tuple<QR, QR, QR>>& finiteTQRs)
+void InductionClauseIterator::resolveClauses()
 {
   CALL("InductionClauseIterator::resolveClauses");
-  DHSet<pair<QR, QR>>::Iterator it(infiniteTQRs);
+  DHSet<Stack<QR>>::Iterator it(_qrsToResolve);
   while (it.hasNext()) {
-    auto p = it.next();
-    vvector<QR> queryCls { p.first, p.second };
+    auto s = it.next();
     LiteralStack st;
-    st.push(Literal::complementaryLiteral(p.first.first));
-    st.push(Literal::complementaryLiteral(p.second.first));
+    for (const auto& qr : s) {
+      st.push(Literal::complementaryLiteral(qr.first));
+    }
     auto uit = getMultiClauseIterator(_ctInt, &st);
     while (uit.hasNext()) {
       auto conclusionCl = uit.next().clause;
+      if (conclusionCl->length() != s.length()) {
+        continue;
+      }
       auto innerIt = conclusionCl->inference().iterator();
       while (conclusionCl->inference().hasNext(innerIt)) {
         auto cl = conclusionCl->inference().next(innerIt)->asClause();
-        _clauses.push(generateClause(queryCls, cl, conclusionCl));
+        _clauses.push(generateClause(s, cl, conclusionCl->literals(), conclusionCl->length()));
       }
     }
   }
-  DHSet<tuple<QR, QR, QR>>::Iterator it2(finiteTQRs);
-  while (it2.hasNext()) {
-    auto t = it2.next();
-    vvector<QR> queryCls { get<0>(t), get<1>(t), get<2>(t) };
-    LiteralStack st;
-    st.push(Literal::complementaryLiteral(get<2>(t).first));
-    st.push(Literal::complementaryLiteral(get<1>(t).first));
-    st.push(Literal::complementaryLiteral(get<0>(t).first));
-    auto uit = getMultiClauseIterator(_ctIntFin, &st);
-    while (uit.hasNext()) {
-      auto conclusionCl = uit.next().clause;
-      auto innerIt = conclusionCl->inference().iterator();
-      while (conclusionCl->inference().hasNext(innerIt)) {
-        auto cl = conclusionCl->inference().next(innerIt)->asClause();
-        _clauses.push(generateClause(queryCls, cl, conclusionCl));
-      }
-    }
-  }
+  _qrsToResolve.reset();
+}
+
+void InductionClauseIterator::addQRToResolve(Stack<QR>& qr)
+{
+  sort(qr.begin(), qr.end());
+  _qrsToResolve.insert(qr);
 }
 
 void InductionClauseIterator::processLiteral(Clause* premise, Literal* lit)
@@ -508,10 +470,6 @@ void InductionClauseIterator::processLiteral(Clause* premise, Literal* lit)
       }
 
       Set<Term*>::Iterator citer1(int_terms);
-#ifdef NEW
-      DHSet<pair<QR, QR>> infiniteTQRs;
-      DHSet<tuple<QR, QR, QR>> finiteTQRs;
-#endif
       while(citer1.hasNext()){
         Term* t = citer1.next();
         Term* indTerm = generalize ? getPlaceholderForTerm(t) : t;
@@ -524,35 +482,8 @@ void InductionClauseIterator::processLiteral(Clause* premise, Literal* lit)
         addToMapFromIterator(leBound, _helper.getLess(t));
         performIntInductionForEligibleBounds(premise, lit, t, indLits, indTerm, /*increasing=*/true, leBound, grBound);
         performIntInductionForEligibleBounds(premise, lit, t, indLits, indTerm, /*increasing=*/false, grBound, leBound);
-
-#ifdef NEW
-        QR main(lit, premise);
-        DHMap<Term*, TermQueryResult>::Iterator itGr(grBound);
-        while (itGr.hasNext()) {
-          auto grTQR = itGr.next();
-          infiniteTQRs.insert(make_pair(main, QR(grTQR.literal, grTQR.clause)));
-          DHMap<Term*, TermQueryResult>::Iterator itLe(leBound);
-          while (itLe.hasNext()) {
-            auto leTQR = itLe.next();
-            auto t = make_tuple(main, QR(grTQR.literal, grTQR.clause), QR(leTQR.literal, leTQR.clause));
-            if (get<2>(t) < get<1>(t)) {
-              swap(get<1>(t),get<2>(t));
-            }
-            finiteTQRs.insert(t);
-          }
-        }
-        DHMap<Term*, TermQueryResult>::Iterator itLe(leBound);
-        while (itLe.hasNext()) {
-          auto leTQR = itLe.next();
-          infiniteTQRs.insert(make_pair(main, QR(leTQR.literal, leTQR.clause)));
-        }
-#endif
-
         List<pair<Literal*, InferenceRule>>::destroy(indLits);
       }
-#ifdef NEW
-      resolveClauses(infiniteTQRs, finiteTQRs);
-#endif
       Set<Term*>::Iterator citer2(ta_terms);
       while(citer2.hasNext()){
         Term* t = citer2.next();
@@ -582,15 +513,17 @@ void InductionClauseIterator::processLiteral(Clause* premise, Literal* lit)
         }
       }
       auto uit = _lis.getGeneralizations(lit, true, true);
+      Stack<QR> queryCls { QR(lit, premise) };
       while (uit.hasNext()) {
         auto qr = uit.next();
-        _clauses.push(generateClause(premise, lit, qr));
+        _clauses.push(generateClause(queryCls, qr.clause, &qr.literal, 1));
       }
    }
 }
 
 void InductionClauseIterator::performIntInductionForEligibleBounds(Clause* premise, Literal* origLit, Term* origTerm, List<pair<Literal*, InferenceRule>>*& indLits, Term* indTerm, bool increasing, DHMap<Term*, TermQueryResult>& bounds1, DHMap<Term*, TermQueryResult>& bounds2) {
   DHMap<Term*, TermQueryResult>::Iterator it1(bounds1);
+  QR mainQr(origLit, premise);
   while (it1.hasNext()) {
     TermQueryResult b1 = it1.next();
     // Skip if the premise equals the bound (that would add tautologies to the search space).
@@ -602,11 +535,20 @@ void InductionClauseIterator::performIntInductionForEligibleBounds(Clause* premi
           if (notDoneInt(origLit, origTerm, increasing, b1.term.term(), b2.term.term(), /*bool fromComparison=*/b1.literal != nullptr)) {
             generalizeAndPerformIntInduction(premise, origLit, origTerm, indLits, indTerm, increasing, b1, &b2);
           }
+#ifdef NEW
+          Stack<QR> qr { mainQr, QR(b1.literal, b1.clause), QR(b2.literal, b2.clause) };
+          addQRToResolve(qr);
+#endif
         }
       }
-      if (_helper.isInductionForInfiniteIntervalsOn() &&
-          notDoneInt(origLit, origTerm, increasing, b1.term.term(), /*optionalBound2=*/nullptr, /*bool fromComparison=*/b1.literal != nullptr)) {
-        generalizeAndPerformIntInduction(premise, origLit, origTerm, indLits, indTerm, increasing, b1, nullptr);
+      if (_helper.isInductionForInfiniteIntervalsOn()) {
+        if (notDoneInt(origLit, origTerm, increasing, b1.term.term(), /*optionalBound2=*/nullptr, /*bool fromComparison=*/b1.literal != nullptr)) {
+          generalizeAndPerformIntInduction(premise, origLit, origTerm, indLits, indTerm, increasing, b1, nullptr);
+        }
+#ifdef NEW
+        Stack<QR> qr { mainQr, QR(b1.literal, b1.clause) };
+        addQRToResolve(qr);
+#endif
       }
     }
   }
@@ -668,43 +610,6 @@ void InductionClauseIterator::processIntegerComparison(Clause* premise, Literal*
   addToMapFromIterator(leBound, _helper.getLess(lt));
   performIntInductionOnEligibleLiterals(
     lt, generalize ? getPlaceholderForTerm(lt) : lt, _helper.getTQRsForInductionTerm(*lesserTL), /*increasing=*/false, TermQueryResult(*greaterTL, lit, premise), leBound);
-
-#ifdef NEW
-  DHSet<pair<QR, QR>> infiniteTQRs;
-  DHSet<tuple<QR, QR, QR>> finiteTQRs;
-  QR compQr(lit, premise);
-  auto mainGr = _helper.getTQRsForInductionTerm(*greaterTL);
-  while (mainGr.hasNext()) {
-    auto main = mainGr.next();
-    infiniteTQRs.insert(make_pair(QR(main.literal, main.clause), compQr));
-    DHMap<Term*, TermQueryResult>::Iterator itGr(grBound);
-    while (itGr.hasNext()) {
-      auto grTQR = itGr.next();
-      infiniteTQRs.insert(make_pair(QR(main.literal, main.clause), QR(grTQR.literal, grTQR.clause)));
-      auto t = make_tuple(QR(main.literal, main.clause), QR(grTQR.literal, grTQR.clause), compQr);
-      if (get<2>(t) < get<1>(t)) {
-        swap(get<1>(t),get<2>(t));
-      }
-      finiteTQRs.insert(t);
-    }
-  }
-  auto mainLe = _helper.getTQRsForInductionTerm(*lesserTL);
-  while (mainLe.hasNext()) {
-    auto main = mainLe.next();
-    infiniteTQRs.insert(make_pair(QR(main.literal, main.clause), compQr));
-    DHMap<Term*, TermQueryResult>::Iterator itLe(leBound);
-    while (itLe.hasNext()) {
-      auto leTQR = itLe.next();
-      infiniteTQRs.insert(make_pair(QR(main.literal, main.clause), QR(leTQR.literal, leTQR.clause)));
-      auto t = make_tuple(QR(main.literal, main.clause), compQr, QR(leTQR.literal, leTQR.clause));
-      if (get<2>(t) < get<1>(t)) {
-        swap(get<1>(t),get<2>(t));
-      }
-      finiteTQRs.insert(t);
-    }
-  }
-  resolveClauses(infiniteTQRs, finiteTQRs);
-#endif
 }
 
 void InductionClauseIterator::performIntInductionOnEligibleLiterals(Term* origTerm, Term* indTerm, TermQueryResultIterator inductionTQRsIt, bool increasing, TermQueryResult bound1, DHMap<Term*, TermQueryResult>& bounds2) {
@@ -722,11 +627,20 @@ void InductionClauseIterator::performIntInductionOnEligibleLiterals(Term* origTe
           if (notDoneInt(tqr.literal, origTerm, increasing, bound1.term.term(), bound2.term.term(), /*bool fromComparison=*/bound1.literal != nullptr)) {
             generalizeAndPerformIntInduction(tqr.clause, tqr.literal, origTerm, indLits, indTerm, increasing, bound1, &bound2);
           }
+#ifdef NEW
+          Stack<QR> qr { QR(tqr.literal, tqr.clause), QR(bound1.literal, bound1.clause), QR(bound2.literal, bound2.clause) };
+          addQRToResolve(qr);
+#endif
         }
       }
-      if (_helper.isInductionForInfiniteIntervalsOn() &&
-          notDoneInt(tqr.literal, origTerm, increasing, bound1.term.term(), /*optionalBound2=*/nullptr, /*bool fromComparison=*/bound1.literal != nullptr)) {
-        generalizeAndPerformIntInduction(tqr.clause, tqr.literal, origTerm, indLits, indTerm, increasing, bound1, nullptr);
+      if (_helper.isInductionForInfiniteIntervalsOn()) {
+        if (notDoneInt(tqr.literal, origTerm, increasing, bound1.term.term(), /*optionalBound2=*/nullptr, /*bool fromComparison=*/bound1.literal != nullptr)) {
+          generalizeAndPerformIntInduction(tqr.clause, tqr.literal, origTerm, indLits, indTerm, increasing, bound1, nullptr);
+        }
+#ifdef NEW
+        Stack<QR> qr { QR(tqr.literal, tqr.clause), QR(bound1.literal, bound1.clause) };
+        addQRToResolve(qr);
+#endif
       }
       List<pair<Literal*, InferenceRule>>::destroy(indLits);
     }
@@ -750,16 +664,16 @@ void InductionClauseIterator::produceClauses(Clause* premise, Literal* origLit, 
   // if hyp_clauses contain the literal(s).
   // (If hyp_clauses do not contain the literal(s), the clause is a definition from clausification
   // and just keep it as it is.)
-  Stack<Clause*>::Iterator cit(hyp_clauses);
+  Stack<QR> queryCls;
+  LiteralStack lits;
+  for (const auto& kv : toResolve) {
+    queryCls.push(kv.second);
+    lits.push(kv.first);
+  }
 #ifdef NEW
   auto premises = UnitList::empty();
 #endif
-  vvector<QR> queryCls;
-  LiteralStack lits;
-  for (const auto& kv : toResolve) {
-    queryCls.push_back(kv.second);
-    lits.push(kv.first);
-  }
+  Stack<Clause*>::Iterator cit(hyp_clauses);
   while(cit.hasNext()){
     Clause* c = cit.next();
     if (toResolve.size() == 1) {
@@ -779,10 +693,8 @@ void InductionClauseIterator::produceClauses(Clause* premise, Literal* origLit, 
   // cout << "insert " << *rc << endl;
   switch (toResolve.size()) {
     case 2:
-      _ctInt.insert(rc);
-      break;
     case 3:
-      _ctIntFin.insert(rc);
+      _ctInt.insert(rc);
       break;
     default:
       break;
