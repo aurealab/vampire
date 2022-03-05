@@ -399,7 +399,7 @@ public:
   : ready(false)
   {
     Recycler::get(cm);
-    cm->init(tree, query, sres);
+    cm->init(tree, query->literals(), query->length(), sres);
   }
   ~ClauseSResIterator()
   {

@@ -42,12 +42,12 @@ using namespace Kernel;
 
 //////////////// general datastructures ////////////////////
 
-CodeTree::LitInfo::LitInfo(Clause* cl, unsigned litIndex)
+CodeTree::LitInfo::LitInfo(Literal** lits, unsigned litIndex)
 : litIndex(litIndex), opposite(false)
 {
   CALL("CodeTree::LitInfo::LitInfo");
 
-  ft=FlatTerm::create((*cl)[litIndex]);
+  ft=FlatTerm::create(lits[litIndex]);
 }
 
 void CodeTree::LitInfo::dispose()

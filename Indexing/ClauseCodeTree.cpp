@@ -252,7 +252,7 @@ void ClauseCodeTree::remove(Clause* cl)
   }
 
   for(unsigned i=0;i<clen;i++) {
-    lInfos[i]=LitInfo(cl,i);
+    lInfos[i]=LitInfo(cl->literals(),i);
     lInfos[i].liIndex=i;
   }
   incTimeStamp();
@@ -492,12 +492,13 @@ void ClauseCodeTree::LiteralMatcher::recordMatch()
  * of the @b query_ clause.
  * If @b sres_ if true, we perform subsumption resolution
  */
-void ClauseCodeTree::ClauseMatcher::init(ClauseCodeTree* tree_, Clause* query_, bool sres_)
+void ClauseCodeTree::ClauseMatcher::init(ClauseCodeTree* tree_, Literal** query_, unsigned queryLength_, bool sres_)
 {
   CALL("ClauseCodeTree::ClauseMatcher::init");
   ASS(!tree_->isEmpty());
 
   query=query_;
+  queryLength=queryLength_;
   tree=tree_;
   sres=sres_;
   lms.reset();
@@ -508,10 +509,10 @@ void ClauseCodeTree::ClauseMatcher::init(ClauseCodeTree* tree_, Clause* query_, 
 #endif
 
   //init LitInfo records
-  unsigned clen=query->length();
+  unsigned clen=queryLength;
   unsigned baseLICnt=clen;
   for(unsigned i=0;i<clen;i++) {
-    if((*query)[i]->isEquality()) {
+    if(query[i]->isEquality()) {
       baseLICnt++;
     }
   }
@@ -521,26 +522,26 @@ void ClauseCodeTree::ClauseMatcher::init(ClauseCodeTree* tree_, Clause* query_, 
   //we put ground literals first
   unsigned liIndex=0;
   for(unsigned i=0;i<clen;i++) {
-    if(!(*query)[i]->ground()) {
+    if(!query[i]->ground()) {
       continue;
     }
     lInfos[liIndex]=LitInfo(query,i);
     lInfos[liIndex].liIndex=liIndex;
     liIndex++;
-    if((*query)[i]->isEquality()) {
+    if(query[i]->isEquality()) {
       lInfos[liIndex]=LitInfo::getReversed(lInfos[liIndex-1]);
       lInfos[liIndex].liIndex=liIndex;
       liIndex++;
     }
   }
   for(unsigned i=0;i<clen;i++) {
-    if((*query)[i]->ground()) {
+    if(query[i]->ground()) {
       continue;
     }
     lInfos[liIndex]=LitInfo(query,i);
     lInfos[liIndex].liIndex=liIndex;
     liIndex++;
-    if((*query)[i]->isEquality()) {
+    if(query[i]->isEquality()) {
       lInfos[liIndex]=LitInfo::getReversed(lInfos[liIndex-1]);
       lInfos[liIndex].liIndex=liIndex;
       liIndex++;
@@ -612,7 +613,7 @@ Clause* ClauseCodeTree::ClauseMatcher::next(int& resolvedQueryLit)
     }
     else if(canEnterLiteral(lm->op)) {
       ASS(lm->op->isLitEnd());
-      ASS_LE(lms.size(), query->length()); //this is due to the seekOnlySuccess part below
+      ASS_LE(lms.size(), queryLength); //this is due to the seekOnlySuccess part below
 
       //LIT_END is never the last operation in the CodeBlock,
       //so we can increase here
@@ -628,7 +629,7 @@ Clause* ClauseCodeTree::ClauseMatcher::next(int& resolvedQueryLit)
 	}
       }
 
-      bool seekOnlySuccess=lms.size()==query->length();
+      bool seekOnlySuccess=lms.size()==queryLength;
       enterLiteral(newLitEntry, seekOnlySuccess);
     }
   }
@@ -652,7 +653,7 @@ inline bool ClauseCodeTree::ClauseMatcher::canEnterLiteral(CodeOp* op)
       matchIndex--;
       MatchInfo* mi=ils->getMatch(matchIndex);
       unsigned liIntex = mi->liIndex;
-      Literal* lit = (*query)[lInfos[liIntex].litIndex];
+      Literal* lit = query[lInfos[liIntex].litIndex];
       ASS(lit->isEquality());
       TermList argSort = SortHelper::getEqualityArgumentSort(lit); 
       if(idxVarSort!=argSort) {//TODO check that this is what we want. Perhaps require unification

@@ -65,7 +65,7 @@ public:
   struct LitInfo
   {
     LitInfo() {}
-    LitInfo(Clause* cl, unsigned litIndex);
+    LitInfo(Literal** cl, unsigned litIndex);
     void dispose();
 
     static LitInfo getReversed(const LitInfo& li);

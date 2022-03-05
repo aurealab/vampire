@@ -97,7 +97,7 @@ private:
 public:
   struct ClauseMatcher
   {
-    void init(ClauseCodeTree* tree_, Clause* query_, bool sres_);
+    void init(ClauseCodeTree* tree_, Literal** query_, unsigned queryLength_, bool sres_);
     void deinit();
 
     Clause* next(int& resolvedQueryLit);
@@ -119,7 +119,8 @@ public:
 
     bool existsCompatibleMatch(ILStruct* si, MatchInfo* sq, ILStruct* oi);
 
-    Clause* query;
+    Literal** query;
+    unsigned queryLength;
     ClauseCodeTree* tree;
     bool sres;
 
